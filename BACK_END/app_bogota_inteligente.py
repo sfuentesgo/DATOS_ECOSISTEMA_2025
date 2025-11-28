@@ -319,20 +319,16 @@ elif st.session_state.step == 4:
     st.info(f"""
     **Parámetros de Entrada:**
     * **Unidad Territorial:** {st.session_state.localidad_sel}
-    * **Radio de Influencia:** {st.session_state.radio_analisis} metros (Escala {
-            'Peatonal' if st.session_state.radio_analisis <= 600 else 
-            'Barrial' if st.session_state.radio_analisis <= 1200 else 'Zonal'
-        })
+    * **Radio de Influencia:** {st.session_state.radio_analisis} metros
     
     *Instrucción: Haga clic en el mapa para establecer el centroide del área de estudio.*
     """)
 
     # Filtrar geometría específica
     localidades = st.session_state.localidades
-    # Obtenemos la fila exacta de la localidad seleccionada
     localidad_geo = localidades[localidades["nombre_localidad"] == st.session_state.localidad_sel]
     
-    # Configuración de estilos del mapa
+    # Configuración del mapa
     bounds = localidad_geo.total_bounds
     center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
 
@@ -348,7 +344,7 @@ elif st.session_state.step == 4:
         localidad_geo,
         name="Límite Administrativo",
         style_function=lambda x: {
-            "fillColor": "#F1C40F", # Amarillo institucional
+            "fillColor": "#F1C40F",
             "color": "#2C3E50",
             "weight": 2,
             "fillOpacity": 0.1,
@@ -356,23 +352,22 @@ elif st.session_state.step == 4:
         }
     ).add_to(m)
 
-    # CSS para mejorar la UX del cursor (Indica que es seleccionable)
+    # CSS para cursor
     cursor_css = """
-    <style>
-        .leaflet-container { cursor: crosshair !important; }
-    </style>
+    <style> .leaflet-container { cursor: crosshair !important; } </style>
     """
     m.get_root().html.add_child(folium.Element(cursor_css))
     
-    # Si ya hay un punto seleccionado previamente (por si recarga), lo dibujamos
+    # Si YA tenemos un punto guardado en memoria, lo dibujamos
     if "punto_lat" in st.session_state:
+        # Marcador del punto
         folium.Marker(
             [st.session_state.punto_lat, st.session_state.punto_lon],
             tooltip="Epicentro Seleccionado",
             icon=folium.Icon(color="red", icon="info-sign")
         ).add_to(m)
         
-        # Dibujamos el buffer visual para que el usuario entienda el alcance
+        # Círculo del radio
         folium.Circle(
             location=[st.session_state.punto_lat, st.session_state.punto_lon],
             radius=st.session_state.radio_analisis,
@@ -384,37 +379,40 @@ elif st.session_state.step == 4:
     # Renderizar mapa
     mapa_interactivo = st_folium(m, width=None, height=500, returned_objects=["last_clicked"])
 
-    # --- Lógica de Captura y Validación ---
+    # --- LÓGICA DE CAPTURA (ACTUALIZAR MEMORIA) ---
     clicked = mapa_interactivo.get("last_clicked")
-    
-    contenedor_validacion = st.container()
     
     if clicked and "lat" in clicked and "lng" in clicked:
         punto_temp = Point(clicked["lng"], clicked["lat"])
         
-        # Validación Topológica: ¿El punto está dentro de la localidad?
-        # Esto evita errores de análisis (ej: elegir un punto en otra localidad por error)
-        es_valido = False
+        # Validación Topológica inmediata
         if localidad_geo.geometry.iloc[0].contains(punto_temp):
-            es_valido = True
+            # GUARDAMOS EN MEMORIA
             st.session_state.punto_lat = clicked["lat"]
             st.session_state.punto_lon = clicked["lng"]
+            # Forzamos una recarga inmediata para pintar el marcador rojo
+            st.rerun()
         else:
-            st.warning("⚠️ El punto seleccionado está fuera de los límites de la localidad activa. Por favor seleccione un punto interior.")
+            st.warning("⚠️ El punto seleccionado está fuera de la localidad activa.")
 
-        if es_valido:
-            with contenedor_validacion:
-                st.markdown("---")
-                col_coords, col_accion = st.columns([2, 1])
-                
-                with col_coords:
-                    st.success("✅ Coordenadas validadas correctamente.")
-                    st.code(f"Lat: {clicked['lat']:.5f} | Lon: {clicked['lng']:.5f}", language="text")
-                
-                with col_accion:
-                    if st.button("Ejecutar Análisis Sectorial 🚀", type="primary", use_container_width=True):
-                        st.session_state.step = 5
-                        st.rerun()
+    # --- LÓGICA DE BOTÓN (SE MUESTRA SIEMPRE QUE HAYA DATOS EN MEMORIA) ---
+    # Al sacarlo del 'if clicked', el botón ya no desaparece al pulsarlo
+    contenedor_validacion = st.container()
+    
+    if "punto_lat" in st.session_state:
+        with contenedor_validacion:
+            st.markdown("---")
+            col_coords, col_accion = st.columns([2, 1])
+            
+            with col_coords:
+                st.success("✅ Coordenadas validadas y fijadas.")
+                st.code(f"Lat: {st.session_state.punto_lat:.5f} | Lon: {st.session_state.punto_lon:.5f}", language="text")
+            
+            with col_accion:
+                # Este botón ahora sí funcionará
+                if st.button("Ejecutar Análisis Sectorial 🚀", type="primary", use_container_width=True):
+                    st.session_state.step = 5
+                    st.rerun()
 
     # Navegación inferior
     st.markdown("---")
