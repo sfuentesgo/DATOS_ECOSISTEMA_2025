@@ -427,7 +427,7 @@ elif st.session_state.step == 4:
             st.rerun()
 
 # ==============================================================================
-# PASO 5: PROCESAMIENTO ANALÍTICO Y GENERACIÓN DE TABLEROS
+# PASO 5: DIAGNÓSTICO INTEGRAL Y REPORTE
 # ==============================================================================
 elif st.session_state.step == 5:
     st.header("Fase 5: Diagnóstico Territorial Integrado")
@@ -438,12 +438,10 @@ elif st.session_state.step == 5:
     * **Epicentro (WGS84):** Lat {st.session_state.punto_lat:.5f}, Lon {st.session_state.punto_lon:.5f}
     * **Alcance Espacial:** Radio de {st.session_state.radio_analisis} metros
     * **Unidad Administrativa:** {st.session_state.localidad_sel}
-    
-    *El sistema ha ejecutado los algoritmos de intersección espacial. A continuación se presentan los hallazgos por dimensión temática.*
     """)
 
     # -------------------------------------------------------------------------
-    # 1. MOTOR DE CÁLCULO ESPACIAL
+    # 1. MOTOR DE CÁLCULO ESPACIAL (GEO-PROCESSING)
     # -------------------------------------------------------------------------
     
     # Carga de capas desde memoria
@@ -453,594 +451,204 @@ elif st.session_state.step == 5:
     colegios    = st.session_state.colegios
     areas_pot   = st.session_state.areas
 
-    # Buffer Geodésico
+    # Creación del Buffer Geodésico
     punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
     gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
+    
+    # Buffer en metros y retorno a WGS84
     gdf_buffer_metros = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis)
     area_interes = gdf_buffer_metros.to_crs(epsg=4326).iloc[0]
 
-    # Filtrado Vectorizado
+    # FILTRADO VECTORIZADO (Asegurando proyecciones)
+    
+    # 1. Manzanas
+    if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
+    
+    # 2. Áreas POT (Corrección: Forzar CRS antes de intersectar)
+    if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
     areas_zona = areas_pot[areas_pot.geometry.intersects(area_interes)]
+
+    # 3. Transporte
+    if transporte.crs != "EPSG:4326": transporte = transporte.to_crs("EPSG:4326")
     transporte_zona = transporte[transporte.geometry.within(area_interes)]
+
+    # 4. Educación
+    if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     colegios_zona = colegios[colegios.geometry.within(area_interes)]
 
     # -------------------------------------------------------------------------
-    # 2. VISUALIZACIÓN: ACCESIBILIDAD Y MOVILIDAD
-    # -------------------------------------------------------------------------
-    st.markdown("### 1. Análisis de Conectividad y Movilidad")
-    st.markdown("Evaluación de la oferta de transporte masivo (Troncal y Zonal).")
-
-    col_mapa_trans, col_ind_trans = st.columns([3, 1])
-    with col_mapa_trans:
-        fig_transporte = go.Figure()
-        fig_transporte.add_trace(go.Scattermapbox(
-            lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', name='Zona de Influencia',
-            fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498DB', width=2)
-        ))
-        if not transporte_zona.empty:
-            fig_transporte.add_trace(go.Scattermapbox(
-                lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
-                mode='markers', name='Estaciones',
-                marker=dict(size=12, color='#E74C3C', symbol='bus'),
-                text=transporte_zona['nombre_estacion'], hoverinfo='text+name'
-            ))
-        fig_transporte.update_layout(
-            mapbox_style="carto-positron", mapbox_zoom=14.5,
-            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            margin={"r":0,"t":0,"l":0,"b":0}, height=400, showlegend=True
-        )
-        st.plotly_chart(fig_transporte, use_container_width=True)
-
-    with col_ind_trans:
-        cant_estaciones = len(transporte_zona)
-        st.metric("Nodos de Transporte", cant_estaciones)
-        if cant_estaciones > 2: st.success("✅ Alta Conectividad")
-        elif cant_estaciones > 0: st.warning("⚠️ Conectividad Media")
-        else: st.error("❌ Baja Cobertura")
-
-    # -------------------------------------------------------------------------
-    # 3. VISUALIZACIÓN: INFRAESTRUCTURA EDUCATIVA
+    # 2. VISUALIZACIÓN: MOVILIDAD (CORREGIDO: ZOOM ALEJADO)
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### 2. Cobertura Educativa")
+    st.markdown("### 1. Análisis de Conectividad y Movilidad")
+    st.markdown("Evaluación de la oferta de transporte masivo (SITP/Troncal).")
+
+    fig_transporte = go.Figure()
+
+    # Buffer
+    fig_transporte.add_trace(go.Scattermapbox(
+        lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+        mode='lines', fill='toself', name='Zona de Influencia',
+        fillcolor='rgba(230, 126, 34, 0.1)', line=dict(color='#D35400', width=2)
+    ))
+
+    # Estaciones
+    if not transporte_zona.empty:
+        fig_transporte.add_trace(go.Scattermapbox(
+            lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
+            mode='markers', name='Estaciones',
+            marker=dict(size=10, color='#C0392B', symbol='bus'), # Icono más pequeño
+            text=transporte_zona['nombre_estacion'], hoverinfo='text'
+        ))
+
+    # Epicentro
+    fig_transporte.add_trace(go.Scattermapbox(
+        lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
+        mode='markers', name='Epicentro', marker=dict(size=12, color='#2980B9')
+    ))
+
+    # Layout (Zoom Ajustado a 13.5 para ver más contexto)
+    fig_transporte.update_layout(
+        mapbox_style="carto-positron", 
+        mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+        mapbox_zoom=13.5, 
+        margin={"r":0,"t":0,"l":0,"b":0}, height=450, showlegend=True,
+        legend=dict(orientation="h", y=1.1)
+    )
     
+    col_mapa_mov, col_kpi_mov = st.columns([3, 1])
+    with col_mapa_mov:
+        st.plotly_chart(fig_transporte, use_container_width=True)
+    with col_kpi_mov:
+        st.metric("Nodos de Transporte", len(transporte_zona))
+        if len(transporte_zona) > 2: st.success("Alta Conectividad")
+        elif len(transporte_zona) > 0: st.warning("Conectividad Media")
+        else: st.error("Baja Cobertura")
+
+    # -------------------------------------------------------------------------
+    # 3. VISUALIZACIÓN: EDUCACIÓN (CORREGIDO: ZOOM ALEJADO + TABLA)
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 2. Infraestructura Educativa")
+    st.markdown("Identificación de colegios oficiales y privados.")
+
     col_ind_edu, col_mapa_edu = st.columns([1, 3])
+
     with col_ind_edu:
-        cant_colegios = len(colegios_zona)
-        st.metric("Instituciones Educativas", cant_colegios)
-        if not colegios_zona.empty:
+        st.metric("Total Colegios", len(colegios_zona))
+        if not colegios_zona.empty and 'sector' in colegios_zona.columns:
+            st.markdown("**Desglose:**")
             st.dataframe(colegios_zona['sector'].value_counts(), use_container_width=True)
 
     with col_mapa_edu:
         fig_edu = go.Figure()
+        # Buffer
         fig_edu.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', fillcolor='rgba(155, 89, 182, 0.1)',
+            mode='lines', fill='toself', fillcolor='rgba(142, 68, 173, 0.1)',
             line=dict(color='#8E44AD', width=2), name='Zona de Influencia'
         ))
+        # Colegios
         if not colegios_zona.empty:
             fig_edu.add_trace(go.Scattermapbox(
                 lat=colegios_zona.geometry.y, lon=colegios_zona.geometry.x,
-                mode='markers', name='Colegios', marker=dict(size=10, color='#8E44AD'),
+                mode='markers', name='Colegios', marker=dict(size=9, color='#9B59B6'),
                 text=colegios_zona['nombre'], hoverinfo='text'
             ))
+        
+        # Layout (Zoom Ajustado a 13.5)
         fig_edu.update_layout(
-            mapbox_style="carto-positron", mapbox_zoom=14.5,
+            mapbox_style="carto-positron", 
             mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            margin={"r":0,"t":0,"l":0,"b":0}, height=400
+            mapbox_zoom=13.5, 
+            margin={"r":0,"t":0,"l":0,"b":0}, height=400, showlegend=False
         )
         st.plotly_chart(fig_edu, use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 4. VISUALIZACIÓN: ESTRATIFICACIÓN Y POT
+    # 4. VISUALIZACIÓN: ESTRATO Y POT (CONSOLIDADOS)
     # -------------------------------------------------------------------------
     st.markdown("---")
     col_estrato, col_pot = st.columns(2)
     
+    # --- Mapa Estrato ---
     with col_estrato:
         st.markdown("### 3. Perfil Socioeconómico")
         if not manzanas_zona.empty:
+            manzanas_zona['estrato'] = manzanas_zona['estrato'].astype(int)
             fig_estrato = px.choropleth_mapbox(
                 manzanas_zona, geojson=manzanas_zona.geometry, locations=manzanas_zona.index,
-                color="estrato", color_continuous_scale="Viridis",
-                mapbox_style="carto-positron", zoom=14, center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-                opacity=0.6
+                color="estrato", title="Estratos", mapbox_style="carto-positron",
+                zoom=14, center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+                opacity=0.6,
+                color_discrete_map={1:'#C0392B', 2:'#E67E22', 3:'#F1C40F', 4:'#2ECC71', 5:'#3498DB', 6:'#8E44AD'}
             )
-            fig_estrato.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350)
+            fig_estrato.update_layout(margin={"r":0,"t":30,"l":0,"b":0}, height=350)
             st.plotly_chart(fig_estrato, use_container_width=True)
-            st.info(f"Moda Socioeconómica: **Estrato {manzanas_zona['estrato'].mode()[0]}**")
+            
+            estrato_moda = manzanas_zona['estrato'].mode()[0]
+            st.info(f"Perfil Dominante: **Estrato {estrato_moda}**")
+        else:
+            st.warning("Sin datos residenciales.")
 
+    # --- Mapa POT (Corregido para evitar vacíos) ---
     with col_pot:
-        st.markdown("### 4. Normativa del Suelo (POT)")
+        st.markdown("### 4. Normativa POT")
         if not areas_zona.empty:
             fig_pot = px.choropleth_mapbox(
                 areas_zona, geojson=areas_zona.geometry, locations=areas_zona.index,
-                color="uso_pot_simplificado", mapbox_style="carto-positron",
+                color="uso_pot_simplificado", title="Usos del Suelo",
+                mapbox_style="carto-positron",
                 zoom=14, center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
                 opacity=0.5, color_discrete_sequence=px.colors.qualitative.Bold
             )
-            fig_pot.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False)
+            fig_pot.update_layout(margin={"r":0,"t":30,"l":0,"b":0}, height=350, showlegend=False)
             st.plotly_chart(fig_pot, use_container_width=True)
-            st.info(f"Vocación Predominante: **{areas_zona['uso_pot_simplificado'].mode()[0]}**")
-
-    # -------------------------------------------------------------------------
-    # 5. SEGURIDAD (NUEVO BLOQUE INTEGRADO)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("5. Contexto de Seguridad y Convivencia")
-    
-    # Recuperamos el dato de la localidad seleccionada
-    localidad_actual = st.session_state.localidad_sel
-    datos_loc = localidades[localidades['nombre_localidad'] == localidad_actual].iloc[0]
-    perfil_seguridad = datos_loc.get('top_3_delitos', 'Información no disponible')
-
-    st.warning(f"""
-    **👮‍♂️ Perfil de Riesgo - {localidad_actual} (2024):**
-    
-    El análisis de datos históricos de la Secretaría de Seguridad indica que los delitos de mayor impacto en esta localidad son:
-    
-    👉 **{perfil_seguridad}**
-    
-    *Este indicador permite focalizar estrategias de prevención y aseguramiento de bienes.*
-    """)
-
-    # -------------------------------------------------------------------------
-    # REPORTE DE CIERRE
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("📑 Informe Ejecutivo")
-    
-    cant_manzanas = len(manzanas_zona)
-    conclusion = "Alta viabilidad de desarrollo" if (cant_estaciones > 1 and cant_colegios > 1) else "Zona con oportunidades de consolidación"
-    
-    st.success(f"""
-    **Dictamen del Sistema:** {conclusion}
-    
-    Se han analizado **{cant_manzanas} manzanas** catastrales. 
-    En el radio de {st.session_state.radio_analisis}m se identifican {cant_estaciones} puntos de transporte y {cant_colegios} colegios.
-    """)
-
-    col_fin1, col_fin2 = st.columns(2)
-    with col_fin1:
-        st.button("📥 Descargar Informe Técnico (PDF)", disabled=True, help="Funcionalidad disponible en versión Pro")
-    with col_fin2:
-        if st.button("🔄 Iniciar Nuevo Diagnóstico", type="primary"):
-            st.session_state.step = 2
-            st.rerun()
-
-    # -------------------------------------------------------------------------
-    # VISUALIZACIÓN 1: SISTEMA DE MOVILIDAD Y CONECTIVIDAD
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### 🚇 Análisis de Accesibilidad al Transporte Público")
-    
-    st.markdown("""
-    Evaluación de la cobertura del Sistema Integrado de Transporte Público (SITP y Troncal) en el área de influencia.
-    La visualización identifica los **nodos de acceso** disponibles, permitiendo estimar la conectividad del sector con el resto de la ciudad.
-    """)
-
-    # --- Optimización: Filtrado Vectorial (Mucho más rápido) ---
-    # Usamos el GeoDataFrame 'transporte_zona' que ya filtramos arriba (Paso 5 inicio)
-    # No necesitamos bucles for lentos.
-    
-    fig_transporte = go.Figure()
-
-    # 1. Capa: Área de Influencia (Contexto)
-    fig_transporte.add_trace(go.Scattermapbox(
-        lat=list(area_interes.exterior.xy[1]),
-        lon=list(area_interes.exterior.xy[0]),
-        mode='lines',
-        fill='toself',
-        name=f'Radio de Análisis ({st.session_state.radio_analisis}m)',
-        fillcolor='rgba(230, 126, 34, 0.1)', # Naranja suave institucional
-        line=dict(color='#D35400', width=2)
-    ))
-
-    # 2. Capa: Estaciones de Transporte
-    if not transporte_zona.empty:
-        fig_transporte.add_trace(go.Scattermapbox(
-            lat=transporte_zona.geometry.y,
-            lon=transporte_zona.geometry.x,
-            mode='markers',
-            name='Estaciones (TM/SITP)',
-            marker=dict(
-                size=12,
-                color='#C0392B', # Rojo Transporte
-                opacity=0.9,
-                symbol='bus'     # Icono temático si Plotly lo soporta, sino círculo
-            ),
-            # Usamos la columna real del dataset limpio
-            text=transporte_zona['nombre_estacion'], 
-            hoverinfo='text'
-        ))
-
-    # 3. Capa: Epicentro del Análisis
-    fig_transporte.add_trace(go.Scattermapbox(
-        lat=[st.session_state.punto_lat],
-        lon=[st.session_state.punto_lon],
-        mode='markers',
-        name='Epicentro Seleccionado',
-        marker=dict(size=15, color='#2980B9', symbol='circle')
-    ))
-
-    # Configuración del Mapa (Layout Limpio)
-    fig_transporte.update_layout(
-        mapbox_style="carto-positron",
-        mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-        mapbox_zoom=14,
-        margin={"r":0,"t":30,"l":0,"b":0},
-        title=dict(text="Red de Transporte Público Cercana", x=0.01),
-        height=500,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-
-    st.plotly_chart(fig_transporte, use_container_width=True)
-
-    # Métricas de Soporte (KPIs)
-    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-    
-    cant_estaciones = len(transporte_zona)
-    densidad = cant_estaciones / (3.14159 * (st.session_state.radio_analisis / 1000) ** 2)
-
-    with col_kpi1:
-        st.metric("Total Estaciones", cant_estaciones, help="Número absoluto de paraderos/estaciones en el radio.")
-    with col_kpi2:
-        st.metric("Densidad (Nodos/km²)", f"{densidad:.1f}", help="Concentración de oferta de transporte.")
-    with col_kpi3:
-        # Interpretación cualitativa automática
-        if cant_estaciones >= 5:
-            calif = "Alta Conectividad"
-            delta_color = "normal"
-        elif cant_estaciones >= 2:
-            calif = "Conectividad Media"
-            delta_color = "off"
+            
+            uso_moda = areas_zona['uso_pot_simplificado'].mode()[0]
+            st.info(f"Vocación: **{uso_moda}**")
         else:
-            calif = "Baja Cobertura"
-            delta_color = "inverse"
-        st.metric("Diagnóstico de Acceso", calif, delta_color=delta_color)
+            st.warning("⚠️ No se detecta normativa POT en este buffer. Es posible que sea una zona de reserva, vía pública o límite urbano.")
 
     # -------------------------------------------------------------------------
-    # VISUALIZACIÓN 2: INFRAESTRUCTURA EDUCATIVA Y COBERTURA
+    # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
     # -------------------------------------------------------------------------
     st.markdown("---")
-    st.markdown("### 🏫 Oferta Educativa en el Entorno")
-    
-    st.markdown("""
-    Georreferenciación de instituciones educativas (Colegios Oficiales y Privados) dentro del perímetro de análisis.
-    Este indicador permite evaluar la **capacidad de soporte educativo** del sector, un factor determinante para la valoración residencial familiar.
-    """)
+    st.header("📑 Informe Ejecutivo")
 
-    # Layout de 2 columnas: Métricas a la izquierda, Mapa a la derecha
-    col_ind_edu, col_mapa_edu = st.columns([1, 3])
-
-    with col_ind_edu:
-        cant_colegios = len(colegios_zona)
-        st.metric("Total Colegios", cant_colegios, help="Instituciones activas registradas en el directorio oficial.")
-        
-        # Valor Agregado: Desglose por Sector (Público/Privado)
-        if not colegios_zona.empty and 'sector' in colegios_zona.columns:
-            st.markdown("##### Desglose por Sector")
-            conteo_sector = colegios_zona['sector'].value_counts()
-            st.dataframe(
-                conteo_sector, 
-                use_container_width=True,
-                column_config={"sector": "Tipo", "count": "Cantidad"}
-            )
-        
-        # Métrica de densidad
-        if cant_colegios > 0:
-            densidad_edu = cant_colegios / (3.14159 * (st.session_state.radio_analisis / 1000) ** 2)
-            st.metric("Densidad (Col/km²)", f"{densidad_edu:.1f}")
-
-    with col_mapa_edu:
-        fig_educacion = go.Figure()
-
-        # 1. Capa: Área de Influencia
-        fig_educacion.add_trace(go.Scattermapbox(
-            lat=list(area_interes.exterior.xy[1]),
-            lon=list(area_interes.exterior.xy[0]),
-            mode='lines',
-            fill='toself',
-            name=f'Radio ({st.session_state.radio_analisis}m)',
-            fillcolor='rgba(142, 68, 173, 0.1)',  # Morado institucional suave
-            line=dict(color='#8E44AD', width=2)
-        ))
-
-        # 2. Capa: Colegios
-        if not colegios_zona.empty:
-            # Color dinámico según sector (Opcional, si no todo morado)
-            # Por simplicidad visual usaremos un solo color con borde
-            fig_educacion.add_trace(go.Scattermapbox(
-                lat=colegios_zona.geometry.y,
-                lon=colegios_zona.geometry.x,
-                mode='markers',
-                name='Instituciones',
-                marker=dict(
-                    size=11,
-                    color='#9B59B6',   # Morado claro
-                    opacity=0.9,
-                    symbol='circle'
-                ),
-                # Usamos el nombre real y el sector en el hover
-                text=colegios_zona['nombre'] + "<br>(" + colegios_zona['sector'] + ")",
-                hoverinfo='text'
-            ))
-
-        # 3. Capa: Epicentro
-        fig_educacion.add_trace(go.Scattermapbox(
-            lat=[st.session_state.punto_lat],
-            lon=[st.session_state.punto_lon],
-            mode='markers',
-            name='Epicentro',
-            marker=dict(size=15, color='#2980B9')
-        ))
-
-        fig_educacion.update_layout(
-            mapbox_style="carto-positron",
-            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            mapbox_zoom=14,
-            margin={"r":0,"t":30,"l":0,"b":0},
-            title=dict(text="Red de Instituciones Educativas", x=0.01),
-            height=450,
-            showlegend=True
-        )
-
-        st.plotly_chart(fig_educacion, use_container_width=True)
-
-    # -------------------------------------------------------------------------
-    # VISUALIZACIÓN 3: PERFIL SOCIOECONÓMICO (ESTRATIFICACIÓN)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### 🏘️ Composición Socioeconómica del Sector")
-    
-    st.markdown("""
-    Distribución espacial de los estratos socioeconómicos asignados a las manzanas catastrales.
-    Este mapa de calor permite identificar la homogeneidad o diversidad social de la zona, un factor clave para estudios de mercado y políticas públicas.
-    """)
-
-    # Definición de paleta de colores estándar para estratos (Semántica)
-    color_estrato_map = {
-        1: '#C0392B',  # Bajo-Bajo (Rojo Oscuro)
-        2: '#E67E22',  # Bajo (Naranja)
-        3: '#F1C40F',  # Medio-Bajo (Amarillo)
-        4: '#2ECC71',  # Medio (Verde)
-        5: '#3498DB',  # Medio-Alto (Azul)
-        6: '#8E44AD'   # Alto (Morado)
-    }
-
-    if not manzanas_zona.empty:
-        # Aseguramos que el estrato sea numérico para el ordenamiento
-        manzanas_zona['estrato'] = manzanas_zona['estrato'].astype(int)
-        
-        # Layout de 2 columnas: Mapa a la izquierda, Estadísticas a la derecha
-        col_mapa_soc, col_stat_soc = st.columns([2, 1])
-
-        with col_mapa_soc:
-            # MAPA OPTIMIZADO (Vectorial)
-            fig_estrato = px.choropleth_mapbox(
-                manzanas_zona,
-                geojson=manzanas_zona.geometry,
-                locations=manzanas_zona.index,
-                color="estrato",
-                title="Distribución Espacial de Estratos",
-                mapbox_style="carto-positron",
-                zoom=14.5,
-                center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-                opacity=0.7,
-                # Mapeo manual de colores para consistencia
-                color_discrete_map={k: v for k, v in color_estrato_map.items() if k in manzanas_zona['estrato'].unique()},
-                labels={'estrato': 'Nivel Socioeconómico'}
-            )
-            
-            # Ajustes visuales del mapa
-            fig_estrato.update_layout(
-                margin={"r":0,"t":30,"l":0,"b":0},
-                height=450,
-                legend=dict(yanchor="top", y=0.95, xanchor="left", x=0.01, bgcolor="rgba(255,255,255,0.8)")
-            )
-            # Dibujar el borde del buffer para contexto
-            fig_estrato.add_trace(go.Scattermapbox(
-                lat=list(area_interes.exterior.xy[1]),
-                lon=list(area_interes.exterior.xy[0]),
-                mode='lines',
-                line=dict(color='#2C3E50', width=1.5),
-                name='Límite de Análisis'
-            ))
-            
-            st.plotly_chart(fig_estrato, use_container_width=True)
-
-        with col_stat_soc:
-            # ESTADÍSTICAS Y GRÁFICO DE BARRAS
-            dist_estratos = manzanas_zona["estrato"].value_counts().sort_index()
-            
-            # Cálculo de la Moda (Estrato predominante)
-            estrato_moda = manzanas_zona['estrato'].mode()[0]
-            pct_moda = (len(manzanas_zona[manzanas_zona['estrato'] == estrato_moda]) / len(manzanas_zona)) * 100
-            
-            st.info(f"""
-            **Perfil Dominante:**
-            El **{pct_moda:.1f}%** de las manzanas del sector pertenecen al **Estrato {estrato_moda}**.
-            """)
-
-            # Gráfico de Barras Limpio
-            fig_barras = go.Figure(data=[
-                go.Bar(
-                    x=[f"E{e}" for e in dist_estratos.index],
-                    y=dist_estratos.values,
-                    marker_color=[color_estrato_map.get(e, '#95A5A6') for e in dist_estratos.index],
-                    text=dist_estratos.values,
-                    textposition='auto',
-                )
-            ])
-            fig_barras.update_layout(
-                title="Conteo de Manzanas",
-                xaxis_title="Estrato",
-                yaxis_title="Cantidad",
-                height=250,
-                margin=dict(l=10, r=10, t=30, b=10),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig_barras, use_container_width=True)
-
-    else:
-        st.warning("⚠️ No se identificaron manzanas residenciales clasificadas dentro del radio seleccionado.")
-
-    # -------------------------------------------------------------------------
-    # VISUALIZACIÓN 4: NORMATIVA Y USOS DEL SUELO (POT - DECRETO 555)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### 4. Vocación Normativa del Suelo")
-    
-    st.markdown("""
-    Análisis de la reglamentación de usos del suelo vigente según el **Plan de Ordenamiento Territorial (POT) - Decreto 555 de 2021**.
-    Esta capa permite identificar qué actividades (Residenciales, Comerciales, Dotacionales o Industriales) están permitidas legalmente en los predios del sector.
-    """)
-
-    if not areas_zona.empty:
-        # Layout: Mapa a la izquierda, Métricas a la derecha
-        col_mapa_pot, col_stat_pot = st.columns([2, 1])
-
-        with col_mapa_pot:
-            # MAPA VECTORIZADO
-            fig_pot = px.choropleth_mapbox(
-                areas_zona,
-                geojson=areas_zona.geometry,
-                locations=areas_zona.index,
-                color="uso_pot_simplificado",  # Columna limpiada en el ETL
-                title="Áreas de Actividad POT",
-                mapbox_style="carto-positron",
-                zoom=14.5,
-                center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-                opacity=0.6,
-                # Paleta de colores distintiva para usos
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                labels={'uso_pot_simplificado': 'Área de Actividad'}
-            )
-
-            # Ajustes de diseño
-            fig_pot.update_layout(
-                margin={"r":0,"t":30,"l":0,"b":0},
-                height=450,
-                legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.01, bgcolor="rgba(255,255,255,0.8)")
-            )
-
-            # Límite del buffer
-            fig_pot.add_trace(go.Scattermapbox(
-                lat=list(area_interes.exterior.xy[1]),
-                lon=list(area_interes.exterior.xy[0]),
-                mode='lines',
-                line=dict(color='#2C3E50', width=1.5),
-                name='Perímetro de Análisis'
-            ))
-
-            st.plotly_chart(fig_pot, use_container_width=True)
-
-        with col_stat_pot:
-            # ESTADÍSTICAS
-            dist_pot = areas_zona["uso_pot_simplificado"].value_counts()
-            
-            # Vocación Predominante
-            uso_moda = dist_pot.index[0]
-            pct_uso = (dist_pot.iloc[0] / len(areas_zona)) * 100
-            
-            st.info(f"""
-            **Vocación Dominante:**
-            El entorno se caracteriza principalmente como **{uso_moda}**, ocupando el **{pct_uso:.1f}%** de las zonas normativas intersectadas.
-            """)
-
-            # Gráfico de Barras
-            fig_barras_pot = go.Figure(data=[
-                go.Bar(
-                    y=[label[:25] + '...' if len(label) > 25 else label for label in dist_pot.index], # Truncar nombres largos
-                    x=dist_pot.values,
-                    orientation='h', # Barras horizontales para leer mejor los nombres largos
-                    marker_color='#1ABC9C', # Turquesa institucional
-                    text=dist_pot.values,
-                    textposition='auto',
-                )
-            ])
-            
-            fig_barras_pot.update_layout(
-                title="Distribución de Áreas",
-                xaxis_title="Cantidad de Polígonos",
-                yaxis_title="",
-                height=300,
-                margin=dict(l=5, r=5, t=30, b=5),
-                yaxis={'categoryorder':'total ascending'} # Ordenar de mayor a menor
-            )
-            st.plotly_chart(fig_barras_pot, use_container_width=True)
-
-    else:
-        st.warning("No se encontró información normativa del POT para las coordenadas seleccionadas (posible zona de reserva o sin reglamentación específica).")
-
-    # -------------------------------------------------------------------------
-    # 6. GENERACIÓN DEL INFORME EJECUTIVO (HTML)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.header("📑 Informe de Inteligencia Territorial")
-    
-    st.info("Generando diagnóstico consolidado...")
-
-    # 1. CÁLCULO DE LÍNEA BASE (Totales de la Localidad)
-    # Optimización: Usamos filtros espaciales en lugar de bucles iterativos
-    
-    # Obtenemos la geometría de la localidad completa
+    # Cálculos previos
     poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
-    
-    # Filtramos estaciones y colegios dentro de toda la localidad (Vectorizado)
     total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
-    total_colegios_loc = len(colegios[colegios.geometry.within(poly_localidad)])
-    
-    # 2. CÁLCULO DE INDICADORES RELATIVOS (Buffer vs Localidad)
     pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
-    pct_cobertura_edu = (len(colegios_zona) / total_colegios_loc * 100) if total_colegios_loc > 0 else 0
     
-    # 3. RECUPERACIÓN DE DATOS CUALITATIVOS
-    # Seguridad
+    # Datos cualitativos
+    datos_loc = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].iloc[0]
     perfil_seguridad = datos_loc.get('top_3_delitos', 'No disponible')
-    # Estrato Moda
-    estrato_dom = manzanas_zona['estrato'].mode()[0] if not manzanas_zona.empty else "N/A"
-    # Uso POT Moda
-    uso_dom = areas_zona['uso_pot_simplificado'].mode()[0] if not areas_zona.empty else "N/A"
+    
+    # Enlace a Google Maps
+    link_gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
 
-    # 4. SCORING AUTOMÁTICO (Algoritmo de Viabilidad)
+    # Scoring
     score = 0
     if len(transporte_zona) >= 3: score += 1
     if len(colegios_zona) >= 2: score += 1
     if not manzanas_zona.empty: score += 1
     
-    if score == 3:
-        dictamen = "ALTAMENTE VIABLE"
-        color_dictamen = "#27AE60" # Verde
-        desc_dictamen = "Zona consolidada con excelente dotación de servicios."
-    elif score == 2:
-        dictamen = "VIABILIDAD MEDIA"
-        color_dictamen = "#F39C12" # Naranja
-        desc_dictamen = "Zona en desarrollo con oportunidades de mejora en infraestructura."
-    else:
-        dictamen = "VIABILIDAD RESTRINGIDA"
-        color_dictamen = "#C0392B" # Rojo
-        desc_dictamen = "Zona con déficit de equipamientos urbanos."
+    dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
+    color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
 
-    # 5. GENERACIÓN DEL HTML (DISEÑO CORPORATIVO)
+    # HTML Template
     html_report = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body {{ font-family: 'Helvetica', sans-serif; color: #333; line-height: 1.6; }}
-            .header {{ background-color: #2C3E50; color: white; padding: 20px; text-align: center; border-radius: 5px; }}
-            .section {{ margin-top: 20px; border-bottom: 2px solid #ECF0F1; padding-bottom: 10px; }}
-            .h-title {{ color: #2980B9; border-left: 5px solid #2980B9; padding-left: 10px; }}
-            .metric-box {{ background-color: #F8F9F9; padding: 15px; border-radius: 5px; margin: 10px 0; border: 1px solid #E5E7E9; }}
-            .alert-box {{ background-color: #FDEDEC; color: #C0392B; padding: 15px; border-left: 5px solid #C0392B; }}
-            .score-box {{ background-color: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; border-radius: 5px; margin-top: 30px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th, td {{ padding: 10px; border: 1px solid #DDD; text-align: left; }}
-            th {{ background-color: #F2F3F4; }}
+            body {{ font-family: sans-serif; color: #333; }}
+            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
+            .box {{ background: #F4F6F6; padding: 15px; margin: 10px 0; border: 1px solid #BDC3C7; }}
+            .alert {{ background: #FADBD8; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; }}
+            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }}
         </style>
     </head>
     <body>
@@ -1048,91 +656,49 @@ elif st.session_state.step == 5:
             <h1>Reporte de Inteligencia Territorial</h1>
             <p>Bogotá Inteligente - Datos al Ecosistema 2025</p>
         </div>
-
-        <div class="section">
-            <h2 class="h-title">1. Definición del Análisis</h2>
-            <table>
-                <tr><th>Localidad</th><td>{st.session_state.localidad_sel}</td></tr>
-                <tr><th>Epicentro (Lat/Lon)</th><td>{st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</td></tr>
-                <tr><th>Radio de Influencia</th><td>{st.session_state.radio_analisis} metros</td></tr>
-            </table>
+        
+        <div class="box">
+            <h3>📍 Ubicación del Análisis</h3>
+            <p><strong>Localidad:</strong> {st.session_state.localidad_sel}</p>
+            <p><strong>Coordenadas:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
+            <a href="{link_gmaps}" target="_blank" class="btn-map">🗺️ Ver Ubicación en Google Maps</a>
         </div>
 
-        <div class="section">
-            <h2 class="h-title">2. Dimensión de Seguridad y Convivencia</h2>
-            <div class="alert-box">
-                <strong>Perfil de Riesgo Identificado (Top 3):</strong><br>
-                {perfil_seguridad}
-            </div>
+        <div class="box">
+            <h3>🚨 Seguridad y Convivencia</h3>
+            <div class="alert"><strong>Focos de Delito (Top 3):</strong><br>{perfil_seguridad}</div>
         </div>
 
-        <div class="section">
-            <h2 class="h-title">3. Indicadores de Cobertura</h2>
-            <table>
-                <tr>
-                    <th>Dimensión</th>
-                    <th>Oferta en Radio ({st.session_state.radio_analisis}m)</th>
-                    <th>Cobertura Relativa (vs Localidad)</th>
-                </tr>
-                <tr>
-                    <td>🚇 Movilidad (Estaciones)</td>
-                    <td>{len(transporte_zona)}</td>
-                    <td>{pct_cobertura_trans:.1f}% del total local</td>
-                </tr>
-                <tr>
-                    <td>🏫 Educación (Colegios)</td>
-                    <td>{len(colegios_zona)}</td>
-                    <td>{pct_cobertura_edu:.1f}% del total local</td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2 class="h-title">4. Caracterización Urbana</h2>
-            <div class="metric-box">
-                <ul>
-                    <li><strong>Nivel Socioeconómico Predominante:</strong> Estrato {estrato_dom}</li>
-                    <li><strong>Vocación Normativa (POT):</strong> {uso_dom}</li>
-                    <li><strong>Densidad Urbana:</strong> {len(manzanas_zona)} manzanas en el sector.</li>
-                </ul>
-            </div>
-        </div>
-
-        <div class="score-box">
-            DICTAMEN: {dictamen}
-            <div style="font-size: 16px; font-weight: normal; margin-top: 5px;">{desc_dictamen}</div>
+        <div class="box">
+            <h3>📊 Indicadores de Cobertura ({st.session_state.radio_analisis}m)</h3>
+            <ul>
+                <li><strong>Transporte:</strong> {len(transporte_zona)} estaciones ({pct_cobertura_trans:.1f}% de la localidad).</li>
+                <li><strong>Educación:</strong> {len(colegios_zona)} colegios.</li>
+                <li><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}.</li>
+            </ul>
         </div>
         
-        <div style="text-align: center; margin-top: 30px; color: #7F8C8D; font-size: 12px;">
-            Generado automáticamente por el Sistema de Inteligencia Territorial de Bogotá.<br>
-            Fuente: Infraestructura de Datos Espaciales (IDECA) & Datos Abiertos Bogotá.
+        <div style="background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 20px; margin-top: 20px;">
+            DICTAMEN: {dictamen_texto}
         </div>
     </body>
     </html>
     """
+
+    col_btn_html, col_reset = st.columns([2, 1])
     
-    # 6. VISUALIZACIÓN EN PANTALLA Y DESCARGA
-    col_kpi_fin, col_dl_fin = st.columns([2, 1])
-    
-    with col_kpi_fin:
-        st.success(f"**Dictamen Final:** {dictamen}")
-        st.caption(desc_dictamen)
-    
-    with col_dl_fin:
+    with col_btn_html:
         st.download_button(
-            label="📥 Descargar Informe Oficial (HTML)",
+            label="📥 Descargar Informe Ejecutivo (HTML)",
             data=html_report,
-            file_name=f"Reporte_Territorial_{st.session_state.localidad_sel}.html",
+            file_name=f"Reporte_{st.session_state.localidad_sel}.html",
             mime="text/html",
             type="primary"
         )
     
-    # Botón de Reinicio
-    st.markdown("---")
-    if st.button("🔄 Iniciar Nuevo Análisis"):
-        # Limpiamos variables de sesión específicas del análisis pero mantenemos los datos cargados
-        for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.session_state.step = 2
-        st.rerun()
+    with col_reset:
+        if st.button("🔄 Iniciar Nuevo Análisis"):
+            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
+                if key in st.session_state: del st.session_state[key]
+            st.session_state.step = 2
+            st.rerun()
