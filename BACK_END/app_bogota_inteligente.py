@@ -209,25 +209,20 @@ elif st.session_state.step == 2:
     with col_mapa:
         # --- PALETA DE COLORES BOGOTÁ ---
         # Usamos el amarillo como base y rojo para destacar
-        COLOR_BASE = "#F9E79F"     # Amarillo suave (Fondo)
-        COLOR_LINEA = "#7F8C8D"    # Gris elegante (Borde)
-        COLOR_HOVER = "#E74C3C"    # Rojo Bogotá (Al pasar el mouse)
+        COLOR_BASE = "#B99F37"     # Amarillo suave (Fondo)
+        COLOR_LINEA = "#201DBD"    # Gris elegante (Borde)
+        COLOR_HOVER = "#EC4835"    # Rojo Bogotá (Al pasar el mouse)
         
         localidades = st.session_state.localidades
-
-        # CORRECCIÓN DE CENTRADO:
-        # En lugar de calcular el centro geométrico (que se desvía a Sumapaz),
-        # fijamos el centro en la Plaza de Bolívar / Los Mártires.
         centro_urbano = [4.6097, -74.0817] 
 
         m = folium.Map(
             location=centro_urbano, 
-            zoom_start=11,  # Un zoom equilibrado para ver toda la mancha urbana
+            zoom_start=11, 
             tiles="CartoDB positron",
             control_scale=True
         )
         
-        # Capa Interactiva con Estilo Ciudadano
         folium.GeoJson(
             localidades,
             style_function=lambda feature: {
@@ -237,23 +232,22 @@ elif st.session_state.step == 2:
                 "fillOpacity": 0.5,
             },
             highlight_function=lambda feature: {
-                "fillColor": COLOR_HOVER,  # Se pone rojo al tocar
+                "fillColor": COLOR_HOVER,
                 "color": "white",
-                "weight": 3,
+                "weight": 2,
                 "fillOpacity": 0.7,
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=["nombre_localidad"],
                 aliases=["Localidad:"],
-                style="font-family: sans-serif; font-size: 14px; color: #333;",
+                style="font-family: sans-serif; font-size: 14px;",
                 sticky=True
             )
         ).add_to(m)
 
-        # Renderizado del mapa
         output = st_folium(m, width=None, height=550, returned_objects=["last_clicked"])
 
-    # --- Lógica de Selección Inteligente ---
+    # --- Lógica de Selección y Ranking ---
     clicked = output.get("last_clicked")
     contenedor_resultado = st.container()
 
@@ -261,7 +255,7 @@ elif st.session_state.step == 2:
         punto = Point(clicked["lng"], clicked["lat"])
         
         seleccion = None
-        perfil_seguridad = "Sin datos recientes"
+        perfil_seguridad = "Sin datos"
         
         for _, row in localidades.iterrows():
             if row["geometry"].contains(punto):
@@ -275,20 +269,38 @@ elif st.session_state.step == 2:
             
             with contenedor_resultado:
                 st.markdown("---")
-                # Diseño de tarjeta de resultados
-                col_res1, col_res2, col_res3 = st.columns([1, 2, 1])
+                col_res1, col_res2, col_res3 = st.columns([1, 1.5, 1])
                 
                 with col_res1:
                     st.markdown(f"### 📍 {seleccion}")
-                    st.caption("Localidad Seleccionada")
+                    st.caption("Has seleccionado esta zona.")
                 
                 with col_res2:
-                    # Alerta visual con el Rojo de la identidad
-                    st.error(f"🚨 **Ojo al dato (Seguridad):**\n\n{perfil_seguridad}")
+                    # PROCESAMIENTO VISUAL DEL RANKING (LISTA LIMPIA)
+                    st.markdown("**🚨 Top 3 Riesgos de Seguridad:**")
+                    
+                    # Convertimos el texto plano en una lista visual atractiva
+                    if "," in perfil_seguridad:
+                        delitos = perfil_seguridad.split(",")
+                        # Usamos HTML simple para dar formato de lista limpia
+                        html_lista = ""
+                        iconos = ["🥇", "🥈", "🥉"] # Medallas para el ranking
+                        
+                        for i, delito in enumerate(delitos):
+                            if i < 3: # Solo aseguramos top 3
+                                # Limpiamos el texto (quitamos el "1." que viene del ETL si es necesario)
+                                texto_delito = delito.split(".")[-1].strip() if "." in delito else delito.strip()
+                                html_lista += f"<div style='margin-bottom:5px;'>{iconos[i]} <b>{texto_delito}</b></div>"
+                        
+                        st.markdown(html_lista, unsafe_allow_html=True)
+                    else:
+                        st.info(perfil_seguridad)
                 
                 with col_res3:
-                    st.write("") # Espacio para alinear
-                    if st.button("✅ Confirmar Zona", type="primary", use_container_width=True):
+                    st.write("") 
+                    st.write("") 
+                    # Este botón ahora será VERDE gracias al CSS del principio
+                    if st.button("✅ Confirmar Zona", use_container_width=True):
                         st.session_state.localidad_sel = seleccion
                         st.session_state.step = 3
                         st.rerun()
