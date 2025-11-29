@@ -341,192 +341,146 @@ elif st.session_state.step == 2:
                         st.rerun()
 
 # ==============================================================================
-# PASO 3: PARAMETRIZACIÓN DEL ALCANCE ESPACIAL (BUFFER)
+# PASO 3: DEFINICIÓN DEL ENTORNO (UBICACIÓN + RADIO) - FLUJO UNIFICADO
 # ==============================================================================
 elif st.session_state.step == 3:
-    st.header("Fase 3: Definición del Área de Influencia")
+    st.header("📍 Paso 3: Define tu Entorno de Análisis")
 
-    # Panel de contexto técnico
-    st.markdown(f"""
-    **Unidad Administrativa Base:** {st.session_state.localidad_sel}
-    
-    Para ejecutar el geoprocesamiento, es necesario definir el **radio de influencia (buffer)**. 
-    Este parámetro determinará la extensión del análisis de vecindad alrededor del punto de interés, filtrando las capas de información (movilidad, educación y normativa) que intersecten con esta geometría.
-    """)
+    # Inyección CSS para botón verde
+    st.markdown("""
+        <style>
+        div.stButton > button[kind="primary"] {
+            background-color: #27AE60 !important;
+            color: white !important;
+            border-radius: 8px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    # ---------------------------------------------------------
+    # 1. BARRA LATERAL DE CONTROLES (IZQUIERDA)
+    # ---------------------------------------------------------
+    col_controles, col_mapa = st.columns([1, 2])
 
-    col_config, col_explicacion = st.columns([1, 1])
-
-    with col_config:
-        st.subheader("Configuración del Radio")
+    with col_controles:
+        st.markdown("### 1. Ubicación")
+        st.info("Haz clic en el mapa para marcar el punto exacto que quieres analizar (tu casa, un local, un lote).")
         
-        # Select slider para pasos discretos y controlados
+        st.markdown("---")
+        
+        st.markdown("### 2. Alcance")
+        # El slider aparece siempre, pero tiene más sentido usarlo después del clic
         radio_analisis = st.select_slider(
-            "Seleccione la distancia lineal de análisis (metros):",
+            "¿Qué tan lejos quieres mirar?",
             options=[300, 600, 900, 1200, 1500, 1800, 2100],
-            value=600,
-            help="Distancia radial desde el punto central hacia la periferia."
+            value=st.session_state.get('radio_analisis', 600), # Recupera valor previo o default 600
+            help="Define el radio del círculo rojo en el mapa."
         )
         st.session_state.radio_analisis = radio_analisis
 
-    with col_explicacion:
-        st.subheader("Interpretación de la Escala")
-        
-        # Lógica para explicar la distancia (Urbanismo Táctico)
-        interpretacion = ""
-        tiempo_caminata = int(radio_analisis / 80) # Promedio 80m/min
-        
+        # Explicación dinámica del radio
+        tiempo_caminata = int(radio_analisis / 80)
         if radio_analisis <= 600:
-            tipo_escala = "Escala Peatonal (Vecindario Inmediato)"
-            desc = "Análisis enfocado en la accesibilidad a pie. Ideal para evaluar dotacionales de proximidad y comercio vecinal."
+            desc_radio = "🚶‍♂️ **Vecindario (5-8 min):** Ideal para comercio local y vida diaria."
         elif radio_analisis <= 1200:
-            tipo_escala = "Escala Barrial (Distrito)"
-            desc = "Cubre el entorno barrial ampliado. Permite evaluar conectividad con el sistema de transporte troncal y servicios intermedios."
+            desc_radio = "🚲 **Barrio (10-15 min):** Cubre colegios y rutas principales."
         else:
-            tipo_escala = "Escala Zonal (Inter-barrial)"
-            desc = "Análisis de gran cobertura. Útil para identificar dinámicas de movilidad motorizada y grandes equipamientos urbanos."
-
-        # Tarjeta de información técnica (Sin emojis, estilo limpio)
-        st.info(f"""
-        **Configuración Actual:** {radio_analisis} metros
-        **Tipo de Análisis:** {tipo_escala}
-        **Tiempo aprox. caminata:** {tiempo_caminata} minutos
-        
-        _{desc}_
-        """)
-
-    # Navegación
-    st.markdown("---")
-    col_atras, col_adelante = st.columns([1, 5])
-    
-    with col_atras:
-        if st.button("⬅ Regresar"):
-            st.session_state.step = 2
-            st.rerun()
+            desc_radio = "🚗 **Zona Amplia:** Para análisis de impacto vehicular o industrial."
             
-    with col_adelante:
-        if st.button("Confirmar Parámetros y Ubicar Punto ➡", type="primary", use_container_width=True):
-            st.session_state.step = 4
-            st.rerun()
+        st.caption(f"{desc_radio}")
 
-# ==============================================================================
-# PASO 4: GEORREFERENCIACIÓN DEL PUNTO DE INTERÉS
-# ==============================================================================
-elif st.session_state.step == 4:
-    st.header("Fase 4: Selección del Epicentro de Análisis")
-
-    # Panel de parámetros activos
-    st.info(f"""
-    **Parámetros de Entrada:**
-    * **Unidad Territorial:** {st.session_state.localidad_sel}
-    * **Radio de Influencia:** {st.session_state.radio_analisis} metros
-    
-    *Instrucción: Haga clic en el mapa para establecer el centroide del área de estudio.*
-    """)
-
-    # Filtrar geometría específica
-    localidades = st.session_state.localidades
-    localidad_geo = localidades[localidades["nombre_localidad"] == st.session_state.localidad_sel]
-    
-    # Configuración del mapa
-    bounds = localidad_geo.total_bounds
-    center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
-
-    m = folium.Map(
-        location=center,
-        zoom_start=13,
-        tiles="CartoDB positron",
-        control_scale=True
-    )
-
-    # Polígono de contexto (Límites de la localidad)
-    folium.GeoJson(
-        localidad_geo,
-        name="Límite Administrativo",
-        style_function=lambda x: {
-            "fillColor": "#F1C40F",
-            "color": "#2C3E50",
-            "weight": 2,
-            "fillOpacity": 0.1,
-            "dashArray": "5, 5"
-        }
-    ).add_to(m)
-
-    # CSS para cursor
-    cursor_css = """
-    <style> .leaflet-container { cursor: crosshair !important; } </style>
-    """
-    m.get_root().html.add_child(folium.Element(cursor_css))
-    
-    # Si YA tenemos un punto guardado en memoria, lo dibujamos
-    if "punto_lat" in st.session_state:
-        # Marcador del punto
-        folium.Marker(
-            [st.session_state.punto_lat, st.session_state.punto_lon],
-            tooltip="Epicentro Seleccionado",
-            icon=folium.Icon(color="red", icon="info-sign")
-        ).add_to(m)
+    # ---------------------------------------------------------
+    # 2. MAPA INTERACTIVO (DERECHA)
+    # ---------------------------------------------------------
+    with col_mapa:
+        localidades = st.session_state.localidades
+        localidad_geo = localidades[localidades["nombre_localidad"] == st.session_state.localidad_sel]
         
-        # Círculo del radio
-        folium.Circle(
-            location=[st.session_state.punto_lat, st.session_state.punto_lon],
-            radius=st.session_state.radio_analisis,
-            color="#E74C3C",
-            fill=True,
-            fill_opacity=0.2
+        # Centrar el mapa en la localidad seleccionada
+        bounds = localidad_geo.total_bounds
+        center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
+
+        m = folium.Map(
+            location=center,
+            zoom_start=13,
+            tiles="CartoDB positron",
+            control_scale=True
+        )
+
+        # Límite de la localidad (Amarillo suave)
+        folium.GeoJson(
+            localidad_geo,
+            style_function=lambda x: {
+                "fillColor": "#F1C40F",
+                "color": "#7F8C8D",
+                "weight": 2,
+                "fillOpacity": 0.1,
+                "dashArray": "5, 5"
+            }
         ).add_to(m)
 
-    # Renderizar mapa
-    mapa_interactivo = st_folium(m, width=None, height=500, returned_objects=["last_clicked"])
+        # Cursor de cruz
+        m.get_root().html.add_child(folium.Element("""
+            <style>.leaflet-container { cursor: crosshair !important; }</style>
+        """))
 
-    # --- LÓGICA DE CAPTURA (ACTUALIZAR MEMORIA) ---
-    clicked = mapa_interactivo.get("last_clicked")
+        # Si ya hay un punto (o acaba de hacer clic), lo dibujamos
+        if "punto_lat" in st.session_state:
+            # Marcador
+            folium.Marker(
+                [st.session_state.punto_lat, st.session_state.punto_lon],
+                icon=folium.Icon(color="red", icon="info-sign"),
+                tooltip="Punto de Análisis"
+            ).add_to(m)
+            
+            # Círculo Dinámico (Responde al slider)
+            folium.Circle(
+                location=[st.session_state.punto_lat, st.session_state.punto_lon],
+                radius=st.session_state.radio_analisis, # Conectado al slider
+                color="#E74C3C",
+                fill=True,
+                fill_opacity=0.2
+            ).add_to(m)
+
+        # Renderizar
+        mapa_output = st_folium(m, width=None, height=500, returned_objects=["last_clicked"])
+
+    # ---------------------------------------------------------
+    # 3. LÓGICA Y BOTONES DE ACCIÓN (ABAJO)
+    # ---------------------------------------------------------
     
+    # Captura del clic
+    clicked = mapa_output.get("last_clicked")
     if clicked and "lat" in clicked and "lng" in clicked:
         punto_temp = Point(clicked["lng"], clicked["lat"])
         
-        # Validación Topológica inmediata
         if localidad_geo.geometry.iloc[0].contains(punto_temp):
-            # GUARDAMOS EN MEMORIA
             st.session_state.punto_lat = clicked["lat"]
             st.session_state.punto_lon = clicked["lng"]
-            # Forzamos una recarga inmediata para pintar el marcador rojo
-            st.rerun()
+            st.rerun() # Recarga para pintar el punto y el círculo
         else:
-            st.warning("⚠️ El punto seleccionado está fuera de la localidad activa.")
+            st.toast("⚠️ El punto está fuera de la localidad. Intenta más adentro.", icon="🚫")
 
-    # --- LÓGICA DE BOTÓN (SE MUESTRA SIEMPRE QUE HAYA DATOS EN MEMORIA) ---
-    # Al sacarlo del 'if clicked', el botón ya no desaparece al pulsarlo
-    contenedor_validacion = st.container()
-    
-    if "punto_lat" in st.session_state:
-        with contenedor_validacion:
-            st.markdown("---")
-            col_coords, col_accion = st.columns([2, 1])
-            
-            with col_coords:
-                st.success("✅ Coordenadas validadas y fijadas.")
-                st.code(f"Lat: {st.session_state.punto_lat:.5f} | Lon: {st.session_state.punto_lon:.5f}", language="text")
-            
-            with col_accion:
-                # Este botón ahora sí funcionará
-                if st.button("Ejecutar Análisis Sectorial 🚀", type="primary", use_container_width=True):
-                    st.session_state.step = 5
-                    st.rerun()
-
-    # Navegación inferior
     st.markdown("---")
-    col_back, col_reset = st.columns([1, 1])
-    with col_back:
-        if st.button("⬅ Corregir Radio", use_container_width=True):
-            st.session_state.step = 3
+    
+    # Solo mostramos el botón de avanzar si ya puso el punto
+    col_atras, col_accion = st.columns([1, 4])
+    
+    with col_atras:
+        if st.button("⬅ Atrás"):
+            st.session_state.step = 2
             st.rerun()
-    with col_reset:
-        if st.button("Reiniciar Sistema", use_container_width=True):
-            st.session_state.step = 1
-            st.rerun()
+            
+    with col_accion:
+        if "punto_lat" in st.session_state:
+            # Botón Verde Grande
+            if st.button("🚀 Generar Diagnóstico Completo", type="primary", use_container_width=True):
+                st.session_state.step = 5 # Saltamos directo al 5 (Diagnóstico)
+                st.rerun()
+        else:
+            st.info("👈 Por favor, haz clic en el mapa para continuar.")
 
+            
 # ==============================================================================
 # PASO 5: DIAGNÓSTICO INTEGRAL Y REPORTE
 # ==============================================================================
