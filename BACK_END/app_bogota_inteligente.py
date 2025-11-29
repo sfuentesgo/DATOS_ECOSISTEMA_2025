@@ -857,167 +857,145 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 # -------------------------------------------------------------------------
-# 5. REPORTE HTML (CON GRÁFICAS REALES Y CRUZADAS)
+# 5. REPORTE HTML (SIMPLIFICADO: MAPA + KPIs)
 # -------------------------------------------------------------------------
 if st.session_state.step == 5: 
     import base64
     import plotly.express as px
-    import geopandas as gpd
+    import plotly.graph_objects as go
 
     st.markdown("---")
-    st.header("📑 Informe Ejecutivo")
+    st.header("📑 Informe Ejecutivo Simplificado")
 
-    # --- 1. RECUPERACIÓN Y CRUCE DE DATOS (LA CLAVE) ---
-    # Recuperamos las variables base
-    poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
-    total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
-    pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
+    # --- 1. PREPARACIÓN DE DATOS ---
+    # Variables clave
+    localidad = st.session_state.localidad_sel
+    radio = st.session_state.radio_analisis
+    lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
     
-    # --- CORRECCIÓN CRÍTICA: Asegurar que tenemos la clasificación POT ---
-    # Intentamos buscar si ya calculaste 'manzanas_final' antes
-    if 'uso_pot_simplificado' not in manzanas_zona.columns:
-        # Si no tiene la columna, HACEMOS EL CRUCE AQUÍ MISMO PARA EL REPORTE
-        try:
-            # Aseguramos proyecciones iguales
-            if areas.crs != manzanas_zona.crs:
-                areas = areas.to_crs(manzanas_zona.crs)
-            
-            # Cruce espacial rápido
-            manzanas_reporte = gpd.sjoin(
-                manzanas_zona, 
-                areas[['uso_pot_simplificado', 'geometry']], 
-                how='left', 
-                predicate='intersects'
-            )
-            # Limpieza de duplicados
-            manzanas_reporte = manzanas_reporte[~manzanas_reporte.index.duplicated(keep='first')]
-            manzanas_reporte['uso_pot_simplificado'] = manzanas_reporte['uso_pot_simplificado'].fillna("Sin Clasificación")
-        except:
-            manzanas_reporte = manzanas_zona.copy()
-            manzanas_reporte['uso_pot_simplificado'] = "Sin Clasificación"
-    else:
-        # Si ya venía lista, la usamos
-        manzanas_reporte = manzanas_zona.copy()
-        manzanas_reporte['uso_pot_simplificado'] = manzanas_reporte['uso_pot_simplificado'].fillna("Sin Clasificación")
+    # Cobertura
+    num_tm = len(transporte_zona)
+    num_col = len(colegios_zona)
+    
+    # Uso del Suelo (Moda)
+    uso_texto = "Sin Clasificación"
+    if not manzanas_zona.empty and 'uso_pot_simplificado' in manzanas_zona.columns:
+        uso_texto = manzanas_zona['uso_pot_simplificado'].mode()[0]
+    
+    # Seguridad
+    datos_loc = localidades[localidades['nombre_localidad'] == localidad].iloc[0]
+    seguridad_texto = datos_loc.get('top_3_delitos', 'No disponible')
 
-    # Calculamos la moda (uso principal) con los datos YA CRUZADOS
-    uso_moda = manzanas_reporte['uso_pot_simplificado'].mode()[0] if not manzanas_reporte.empty else "N/A"
-
-    # --- 2. GENERACIÓN DE IMÁGENES EXACTAS A LA APP ---
-    with st.spinner("Renderizando gráficas para el informe..."):
-        
-        # A. EL MAPA (Usando manzanas_reporte que YA tiene colores)
-        fig_mapa = px.choropleth_mapbox(
-            manzanas_reporte,
-            geojson=manzanas_reporte.geometry,
-            locations=manzanas_reporte.index,
-            color="uso_pot_simplificado", # Ahora sí tiene datos
-            mapbox_style="carto-positron",
-            zoom=14,
-            center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            opacity=0.6,
-            color_discrete_sequence=px.colors.qualitative.Bold # Colores fuertes
-        )
-        fig_mapa.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
-        img_bytes_mapa = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
-        b64_mapa = base64.b64encode(img_bytes_mapa).decode('utf-8')
-
-        # B. LA GRÁFICA DE BARRAS (Usando los mismos datos)
-        conteo = manzanas_reporte['uso_pot_simplificado'].value_counts()
-        
-        # Creamos la gráfica idéntica a la App
-        fig_bar = px.bar(
-            x=conteo.values, 
-            y=conteo.index, 
-            orientation='h',
-            text=conteo.values,
-            color=conteo.index, # Colorear por categoría
-            color_discrete_sequence=px.colors.qualitative.Bold
-        )
-        
-        fig_bar.update_layout(
-            margin={"r":10,"t":0,"l":0,"b":0}, 
-            height=250, 
-            plot_bgcolor='rgba(0,0,0,0)',
-            xaxis=dict(showgrid=False, showticklabels=False),
-            yaxis=dict(showgrid=False),
-            showlegend=False
-        )
-        
-        img_bytes_bar = fig_bar.to_image(format="png", width=600, height=250, scale=2)
-        b64_bar = base64.b64encode(img_bytes_bar).decode('utf-8')
-
-    # Scoring y Textos
+    # Scoring Simplificado
     score = 0
-    if len(transporte_zona) >= 3: score += 1
-    if len(colegios_zona) >= 2: score += 1
-    if not manzanas_reporte.empty: score += 1
+    if num_tm >= 2: score += 1
+    if num_col >= 1: score += 1
+    if uso_texto != "Sin Clasificación": score += 1
     
-    dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
+    dictamen = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
+    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
 
-    # --- 3. PLANTILLA HTML ---
+    # --- 2. GENERAMOS SOLO EL MAPA (LA IMAGEN CLAVE) ---
+    with st.spinner("Generando mapa de ubicación..."):
+        try:
+            # Mapa limpio: Solo las manzanas y el punto central
+            fig_mapa = px.choropleth_mapbox(
+                manzanas_zona,
+                geojson=manzanas_zona.geometry,
+                locations=manzanas_zona.index,
+                color_discrete_sequence=["#3498DB"], # Un solo color azul corporativo
+                mapbox_style="carto-positron",
+                zoom=14.5,
+                center={"lat": lat, "lon": lon},
+                opacity=0.6
+            )
+            
+            # Agregamos el PIN rojo del usuario
+            fig_mapa.add_trace(go.Scattermapbox(
+                lat=[lat], lon=[lon],
+                mode='markers',
+                marker=dict(size=12, color='red'),
+                name='Ubicación'
+            ))
+            
+            fig_mapa.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+            
+            # Convertir a Base64
+            img_bytes = fig_mapa.to_image(format="png", width=600, height=300, scale=2)
+            b64_mapa = base64.b64encode(img_bytes).decode('utf-8')
+            html_mapa = f'<img src="data:image/png;base64,{b64_mapa}" style="width:100%; border-radius:10px; border:1px solid #ccc;">'
+            
+        except Exception as e:
+            html_mapa = f"<div style='padding:20px; background:#f0f0f0; text-align:center;'>Mapa no disponible ({str(e)})</div>"
+
+    # --- 3. PLANTILLA HTML LIMPIA (ESTILO TARJETA) ---
     html_report = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <style>
-            body {{ font-family: 'Helvetica', sans-serif; color: #333; max-width: 800px; margin: 0 auto; }}
-            .header {{ background: linear-gradient(90deg, #2C3E50 0%, #34495E 100%); color: white; padding: 25px; text-align: center; border-radius: 0 0 10px 10px; }}
-            .section {{ margin-top: 25px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
-            .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }}
-            .stat-box {{ background: #EAEDED; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; color: #2C3E50; }}
-            .img-container {{ text-align: center; margin: 20px 0; }}
-            img {{ max-width: 100%; border: 1px solid #eee; border-radius: 5px; }}
-            .dictamen {{ background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; margin-top: 30px; border-radius: 8px; }}
+            body {{ font-family: 'Helvetica', sans-serif; max-width: 800px; margin: 0 auto; color: #333; }}
+            .header {{ text-align: center; padding: 20px; background: #2C3E50; color: white; border-radius: 0 0 10px 10px; }}
+            .card {{ border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+            .kpi-container {{ display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }}
+            .kpi-box {{ flex: 1; background: #F4F6F7; padding: 15px; text-align: center; border-radius: 8px; border-top: 4px solid #3498DB; }}
+            .kpi-val {{ font-size: 24px; font-weight: bold; color: #2C3E50; display: block; }}
+            .kpi-label {{ font-size: 12px; color: #777; text-transform: uppercase; }}
+            .dictamen {{ margin-top: 20px; padding: 15px; background: {color_fondo}; color: white; text-align: center; font-size: 20px; font-weight: bold; border-radius: 8px; }}
+            .security-box {{ margin-top: 20px; padding: 15px; background: #FDEDEC; border-left: 5px solid #C0392B; color: #922B21; }}
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>Reporte de Inteligencia Territorial</h1>
-            <p>Bogotá Inteligente - Datos al Ecosistema 2025</p>
+            <h1 style="margin:0;">Reporte de Inteligencia Territorial</h1>
+            <p style="margin:5px 0 0;">Bogotá D.C. | {localidad}</p>
         </div>
-        
-        <div class="section">
-            <h2 style="border-bottom: 2px solid #2C3E50; color: #2C3E50;">📍 1. Contexto Urbano</h2>
-            <p><strong>Localidad:</strong> {st.session_state.localidad_sel}</p>
-            <div class="img-container">
-                <img src="data:image/png;base64,{b64_mapa}" alt="Mapa de la zona">
-                <p><em>Figura 1. Clasificación POT en la zona de influencia.</em></p>
+
+        <div class="card">
+            <h3 style="border-bottom: 2px solid #eee; padding-bottom: 10px;">📍 Zona de Análisis ({radio}m)</h3>
+            <p>Coordenadas: {lat:.5f}, {lon:.5f}</p>
+            {html_mapa}
+            
+            <div class="kpi-container">
+                <div class="kpi-box">
+                    <span class="kpi-val">{num_tm}</span>
+                    <span class="kpi-label">Estaciones TM</span>
+                </div>
+                <div class="kpi-box">
+                    <span class="kpi-val">{num_col}</span>
+                    <span class="kpi-label">Colegios</span>
+                </div>
+                <div class="kpi-box">
+                    <span class="kpi-val" style="font-size:16px; padding-top:5px;">{uso_texto}</span>
+                    <span class="kpi-label">Vocación POT</span>
+                </div>
             </div>
         </div>
 
-        <div class="section">
-            <h2 style="border-bottom: 2px solid #2C3E50; color: #2C3E50;">📊 2. Análisis de Usos y Cobertura</h2>
-            <div class="stat-grid">
-                <div class="stat-box">🚇 {len(transporte_zona)} Estaciones TM<br><small style="font-weight:normal;">Cobertura: {pct_cobertura_trans:.1f}%</small></div>
-                <div class="stat-box">🏫 {len(colegios_zona)} Colegios<br><small style="font-weight:normal;">En radio cercano</small></div>
-            </div>
-            
-            <h3 style="margin-top: 20px; color: #34495E;">Distribución Normativa (POT)</h3>
-            <p>El uso predominante es: <strong>{uso_moda}</strong></p>
-            
-            <div class="img-container">
-                <img src="data:image/png;base64,{b64_bar}" alt="Gráfica de Usos">
+        <div class="card">
+            <h3 style="border-bottom: 2px solid #eee; padding-bottom: 10px;">🛡️ Perfil de Riesgo</h3>
+            <p>Principales incidentes reportados en la localidad:</p>
+            <div class="security-box">
+                {seguridad_texto}
             </div>
         </div>
-        
+
         <div class="dictamen">
-            DICTAMEN: {dictamen_texto}
+            DICTAMEN: {dictamen}
         </div>
         
-        <div style="text-align: center; margin-top: 20px; color: #999; font-size: 11px;">
-            Generado el 28/11/2025
+        <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
+            Generado automáticamente el 28/11/2025
         </div>
     </body>
     </html>
     """
 
-    # --- 4. BOTONES ---
-    col_btn_html, col_reset = st.columns([2, 1])
+    # --- 4. BOTONES (VERDE) ---
+    col1, col2 = st.columns([2, 1])
     
-    with col_btn_html:
+    with col1:
         st.markdown("""
             <style>
             div.stDownloadButton > button {
@@ -1033,15 +1011,15 @@ if st.session_state.step == 5:
         """, unsafe_allow_html=True)
         
         st.download_button(
-            label="📥 Descargar Informe Completo (HTML)",
+            label="📥 Descargar Ficha Técnica (PDF/HTML)",
             data=html_report,
-            file_name=f"Reporte_{st.session_state.localidad_sel}.html",
+            file_name=f"Ficha_{localidad}_Simplificada.html",
             mime="text/html"
         )
-    
-    with col_reset:
-        if st.button("🔄 Iniciar Nuevo Análisis"):
-            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'step']:
-                if key in st.session_state: del st.session_state[key]
+        
+    with col2:
+        if st.button("🔄 Nuevo Análisis"):
+            # Limpiar todo
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.rerun()
-
