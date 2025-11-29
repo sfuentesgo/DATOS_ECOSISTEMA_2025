@@ -858,94 +858,176 @@ elif st.session_state.step == 5:
     """, unsafe_allow_html=True)
 
     
-    # -------------------------------------------------------------------------
-    # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.header("📑 Informe Ejecutivo")
+import base64
 
-    # Cálculos previos
-    poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
-    total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
-    pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
-    
-    # Datos cualitativos
-    datos_loc = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].iloc[0]
-    perfil_seguridad = datos_loc.get('top_3_delitos', 'No disponible')
-    
-    # Enlace a Google Maps
-    link_gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
+# -------------------------------------------------------------------------
+# 5. REPORTE EJECUTIVO (CON IMÁGENES EMBEBIDAS)
+# -------------------------------------------------------------------------
+st.markdown("---")
+st.header("📑 Informe Ejecutivo para Toma de Decisiones")
 
-    # Scoring
-    score = 0
-    if len(transporte_zona) >= 3: score += 1
-    if len(colegios_zona) >= 2: score += 1
-    if not manzanas_zona.empty: score += 1
-    
-    dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
+# --- PASO A: GENERAR LAS IMÁGENES PARA EL REPORTE ---
+# No podemos usar los mapas interactivos en un PDF/HTML estático.
+# Generamos versiones estáticas (fotos) de lo que vimos arriba.
 
-    # HTML Template
-    html_report = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: sans-serif; color: #333; }}
-            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
-            .box {{ background: #F4F6F6; padding: 15px; margin: 10px 0; border: 1px solid #BDC3C7; }}
-            .alert {{ background: #FADBD8; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; }}
-            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>Reporte de Inteligencia Territorial</h1>
-            <p>Bogotá Inteligente - Datos al Ecosistema 2025</p>
-        </div>
+with st.spinner("Generando capturas de mapas y gráficas para el informe..."):
+    
+    # 1. Captura del MAPA (Recreamos el mapa de la sección 4)
+    # Usamos las manzanas clasificadas que ya calculamos
+    fig_mapa_static = px.choropleth_mapbox(
+        manzanas_final, 
+        geojson=manzanas_final.geometry, 
+        locations=manzanas_final.index,
+        color="uso_pot_simplificado", 
+        color_discrete_map=color_map, # Usamos el mismo mapa de colores
+        mapbox_style="carto-positron", 
+        zoom=14,
+        center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+        opacity=0.7
+    )
+    fig_mapa_static.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+    
+    # Convertimos a imagen (bytes) -> Texto Base64
+    # engine="kaleido" es necesario para exportar estáticos
+    img_bytes_mapa = fig_mapa_static.to_image(format="png", width=800, height=400, scale=2)
+    b64_mapa = base64.b64encode(img_bytes_mapa).decode('utf-8')
+
+    # 2. Captura del GRÁFICO DE BARRAS
+    # Recreamos la gráfica de la sección 4
+    conteo_reporte = manzanas_final['uso_pot_simplificado'].value_counts()
+    colores_barras_rep = [color_map.get(x, '#333') for x in conteo_reporte.index]
+    
+    fig_barras_static = go.Figure(data=[go.Bar(
+        y=[str(x) for x in conteo_reporte.index], 
+        x=conteo_reporte.values, 
+        orientation='h',
+        marker_color=colores_barras_rep
+    )])
+    fig_barras_static.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', # Fondo transparente
+        margin=dict(l=0,r=0,t=0,b=0), 
+        yaxis=dict(autorange="reversed", automargin=True)
+    )
+    
+    img_bytes_barras = fig_barras_static.to_image(format="png", width=600, height=300, scale=2)
+    b64_barras = base64.b64encode(img_bytes_barras).decode('utf-8')
+
+
+# --- PASO B: PREPARAR DATOS DEL INFORME ---
+poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
+total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
+pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
+datos_loc = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].iloc[0]
+perfil_seguridad = datos_loc.get('top_3_delitos', 'No disponible')
+uso_moda = manzanas_final['uso_pot_simplificado'].mode()[0] if not manzanas_final.empty else "N/A"
+
+# Scoring (Lógica de negocio)
+score = 0
+if len(transporte_zona) >= 2: score += 1
+if len(colegios_zona) >= 1: score += 1
+if uso_moda != "Sin Clasificación": score += 1
+
+dictamen_texto = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
+color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" # Verde, Naranja, Rojo
+
+# --- PASO C: PLANTILLA HTML CON IMÁGENES INCRUSTADAS ---
+html_report = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; max-width: 900px; margin: 0 auto; }}
+        .header {{ background: linear-gradient(90deg, #2C3E50 0%, #4CA1AF 100%); color: white; padding: 30px; text-align: center; border-radius: 0 0 15px 15px; }}
+        .section {{ margin: 25px 0; padding: 20px; background: #F9F9F9; border-radius: 10px; border: 1px solid #E0E0E0; }}
+        .title-sec {{ color: #2C3E50; border-bottom: 2px solid #3498DB; padding-bottom: 5px; margin-bottom: 15px; }}
+        .kpi-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+        .img-container {{ text-align: center; margin: 20px 0; border: 1px solid #ddd; padding: 5px; background: white; }}
+        .img-container img {{ max-width: 100%; height: auto; }}
+        .dictamen {{ background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; border-radius: 10px; margin-top: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .footer {{ text-align: center; font-size: 12px; color: #777; margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Reporte de Inteligencia Territorial</h1>
+        <p>Análisis de Viabilidad Urbana - Bogotá 2025</p>
+    </div>
+    
+    <div class="section">
+        <h2 class="title-sec">1. Ubicación y Contexto</h2>
+        <p><strong>Localidad:</strong> {st.session_state.localidad_sel} | <strong>Coordenadas:</strong> {st.session_state.punto_lat:.4f}, {st.session_state.punto_lon:.4f}</p>
         
-        <div class="box">
-            <h3>📍 Ubicación del Análisis</h3>
-            <p><strong>Localidad:</strong> {st.session_state.localidad_sel}</p>
-            <p><strong>Coordenadas:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
-            <a href="{link_gmaps}" target="_blank" class="btn-map">🗺️ Ver Ubicación en Google Maps</a>
+        <div class="img-container">
+            <img src="data:image/png;base64,{b64_mapa}" alt="Mapa de Calor">
+            <p><em>Figura 1. Clasificación normativa del suelo en el área de influencia ({st.session_state.radio_analisis}m)</em></p>
         </div>
+    </div>
 
-        <div class="box">
-            <h3>🚨 Seguridad y Convivencia</h3>
-            <div class="alert"><strong>Focos de Delito (Top 3):</strong><br>{perfil_seguridad}</div>
+    <div class="section">
+        <h2 class="title-sec">2. Diagnóstico Normativo (POT)</h2>
+        <div class="kpi-grid">
+            <div>
+                <p>El uso del suelo predominante en la zona es <strong>{uso_moda}</strong>.</p>
+                <p>Este perfil normativo determina la capacidad constructiva y el tipo de desarrollo permitido.</p>
+            </div>
+            <div class="img-container">
+                <img src="data:image/png;base64,{b64_barras}" alt="Gráfica Barras">
+            </div>
         </div>
+    </div>
 
-        <div class="box">
-            <h3>📊 Indicadores de Cobertura ({st.session_state.radio_analisis}m)</h3>
-            <ul>
-                <li><strong>Transporte:</strong> {len(transporte_zona)} estaciones ({pct_cobertura_trans:.1f}% de la localidad).</li>
-                <li><strong>Educación:</strong> {len(colegios_zona)} colegios.</li>
-                <li><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}.</li>
-            </ul>
-        </div>
-        
-        <div style="background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 20px; margin-top: 20px;">
-            DICTAMEN: {dictamen_texto}
-        </div>
-    </body>
-    </html>
-    """
-
-    col_btn_html, col_reset = st.columns([2, 1])
+    <div class="section">
+        <h2 class="title-sec">3. Infraestructura y Seguridad</h2>
+        <ul>
+            <li><strong>Transporte Masivo:</strong> {len(transporte_zona)} estaciones en rango ({pct_cobertura_trans:.1f}% de la oferta local).</li>
+            <li><strong>Equipamiento Educativo:</strong> {len(colegios_zona)} colegios cercanos.</li>
+            <li><strong>Alerta de Seguridad:</strong> Los principales incidentes reportados en el cuadrante son: <em>{perfil_seguridad}</em>.</li>
+        </ul>
+    </div>
     
-    with col_btn_html:
-        st.download_button(
-            label="📥 Descargar Informe Ejecutivo (HTML)",
-            data=html_report,
-            file_name=f"Reporte_{st.session_state.localidad_sel}.html",
-            mime="text/html",
-            type="primary"
-        )
-    
-    with col_reset:
-        if st.button("🔄 Iniciar Nuevo Análisis"):
-            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
-                if key in st.session_state: del st.session_state[key]
-            st.session_state.step = 2
-            st.rerun()
+    <div class="dictamen">
+        DICTAMEN TÉCNICO: {dictamen_texto}
+    </div>
+
+    <div class="footer">
+        Generado automáticamente por el Sistema de Inteligencia Territorial de Bogotá.
+        <br>Fecha de generación: 2025-11-28
+    </div>
+</body>
+</html>
+"""
+
+# --- PASO D: BOTÓN DE DESCARGA (CSS HACK PARA QUE SEA VERDE) ---
+# Streamlit usa 'primary' que suele ser rojo, forzamos verde con CSS
+st.markdown("""
+<style>
+div.stDownloadButton > button {
+    background-color: #27AE60 !important;
+    color: white !important;
+    border-color: #219150 !important;
+    font-size: 18px !important;
+    padding: 15px 30px !important;
+}
+div.stDownloadButton > button:hover {
+    background-color: #219150 !important;
+}
+</style>""", unsafe_allow_html=True)
+
+col_btn, col_reset = st.columns([3, 1])
+
+with col_btn:
+    st.download_button(
+        label="📥 Descargar Informe Oficial (PDF/HTML)",
+        data=html_report,
+        file_name=f"Reporte_Inteligencia_{st.session_state.localidad_sel}.html",
+        mime="text/html"
+    )
+
+with col_reset:
+    if st.button("🔄 Nuevo Análisis"):
+        # Limpiar variables clave
+        for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
+            if key in st.session_state: del st.session_state[key]
+        st.session_state.step = 2
+        st.rerun()
