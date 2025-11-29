@@ -187,30 +187,40 @@ if st.session_state.step == 1:
 # PASO 2: SELECCIÓN DE LOCALIDAD (EXPERIENCIA MEJORADA)
 # ==============================================================================
 elif st.session_state.step == 2:
-    # --- INYECCIÓN CSS PARA BOTONES PERSONALIZADOS ---
+    # --- INYECCIÓN CSS CORREGIDA ---
     st.markdown("""
         <style>
-        /* Estilo para el botón PRINCIPAL (Verde) */
-        div.row-widget.stButton > button[kind="primary"] {
+        /* 1. Estilo para el botón PRINCIPAL (Verde - Confirmar) */
+        /* Buscamos botones con el atributo kind="primary" */
+        div.stButton > button[kind="primary"] {
             background-color: #27AE60 !important;
             border-color: #27AE60 !important;
             color: white !important;
             font-size: 16px !important;
             border-radius: 8px !important;
-            height: 50px !important; /* Altura fija para uniformidad */
+            height: 50px !important;
+            transition: all 0.3s ease;
         }
-        div.row-widget.stButton > button[kind="primary"]:hover {
+        div.stButton > button[kind="primary"]:hover {
             background-color: #2ECC71 !important;
+            border-color: #2ECC71 !important;
             transform: scale(1.02);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
-        /* Estilo para el botón SECUNDARIO (Gris) */
-        div.row-widget.stButton > button[kind="secondary"] {
+        /* 2. Estilo para el botón SECUNDARIO (Gris - Volver) */
+        /* Buscamos botones normales (kind="secondary") */
+        div.stButton > button[kind="secondary"] {
             background-color: #95A5A6 !important;
             border-color: #95A5A6 !important;
             color: white !important;
             border-radius: 8px !important;
             height: 50px !important;
+        }
+        div.stButton > button[kind="secondary"]:hover {
+            background-color: #7F8C8D !important;
+            border-color: #7F8C8D !important;
+            color: white !important;
         }
         </style>
     """, unsafe_allow_html=True)
