@@ -709,78 +709,136 @@ elif st.session_state.step == 5:
         manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
 
     # -------------------------------------------------------------------------
-    # VISUALIZACIÓN (LÓGICA TRAÍDA DE PRUEBA.PY)
+    # SECCIÓN 4: POT (CORRECCIÓN DE CRUCE + DIAGNÓSTICO)
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
+
+    # 1. Copia de seguridad
+    manzanas_final = manzanas_zona.copy()
+    clasificacion_exitosa = False
+
+    # --- DIAGNÓSTICO RÁPIDO (Solo para ver si hay datos cargados) ---
+    # st.write(f"Cantidad de áreas POT cargadas: {len(areas_pot)}")
+    # st.write(f"CRS Manzanas: {manzanas_final.crs}")
+    # st.write(f"CRS Áreas POT: {areas_pot.crs}")
+
+    if not manzanas_final.empty and not areas_pot.empty:
+        try:
+            # A. Asegurar CRS idéntico
+            if areas_pot.crs != manzanas_final.crs:
+                areas_pot = areas_pot.to_crs(manzanas_final.crs)
+
+            # B. Reparar geometrías inválidas (clave para evitar fallos silenciosos)
+            areas_pot['geometry'] = areas_pot.geometry.buffer(0)
+            manzanas_final['geometry'] = manzanas_final.geometry.buffer(0)
+
+            # C. CRUCE ESPACIAL (LA CORRECCIÓN ESTÁ AQUÍ)
+            # En lugar de usar centroides + within, usamos intersects directo.
+            # Esto atrapa la manzana si aunque sea un pedacito toca el área del POT.
+            cruce = gpd.sjoin(
+                manzanas_final,  # Usamos el polígono completo, no el centroide
+                areas_pot[['uso_pot_simplificado', 'geometry']], 
+                how='left', 
+                predicate='intersects' # CAMBIO CLAVE: 'within' era muy estricto
+            )
+            
+            # D. Limpieza de duplicados
+            # Al usar intersects, una manzana puede tocar 2 zonas. Nos quedamos con la que tenga mayor área de contacto
+            # (Simplificación: nos quedamos con la primera que encuentre para no complicar el código)
+            cruce = cruce[~cruce.index.duplicated(keep='first')]
+            
+            # Asignar
+            manzanas_final['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
+            
+            # Rellenar nulos
+            manzanas_final['uso_pot_simplificado'] = manzanas_final['uso_pot_simplificado'].fillna('Sin Clasificación')
+            
+            # Validar si logramos clasificar algo
+            if len(manzanas_final[manzanas_final['uso_pot_simplificado'] != 'Sin Clasificación']) > 0:
+                clasificacion_exitosa = True
+            
+        except Exception as e:
+            st.error(f"Error técnico en el cruce: {str(e)}")
+            manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
+    else:
+        st.warning("No hay datos de POT cargados o manzanas seleccionadas.")
+        manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
+
+    # -------------------------------------------------------------------------
+    # VISUALIZACIÓN
     # -------------------------------------------------------------------------
     col_mapa_pot, col_data_pot = st.columns([2, 1])
     
     with col_mapa_pot:
-        # 1. Crear paleta de colores dinámica (Igual que en prueba.py líneas 167-175)
+        # Definir colores
         cats = manzanas_final["uso_pot_simplificado"].unique().tolist()
-        palette = px.colors.qualitative.Plotly  # Usamos la paleta vibrante de Plotly
+        palette = px.colors.qualitative.Bold # Usamos colores fuertes
         
-        # Diccionario: Categoría -> Color
-        color_map = {cat: palette[i % len(palette)] for i, cat in enumerate(cats)}
+        # Mapa de colores seguro
+        color_map = {}
+        for i, cat in enumerate(cats):
+            if cat == "Sin Clasificación":
+                color_map[cat] = "#95A5A6" # Gris
+            else:
+                color_map[cat] = palette[i % len(palette)]
         
-        # Forzar colores específicos para "Sin Clasificación"
-        if "Sin Clasificación" in color_map:
-            color_map["Sin Clasificación"] = "#95A5A6"  # Gris concreto
-        
-        # 2. Generar el Mapa
         fig_p = px.choropleth_mapbox(
             manzanas_final, 
             geojson=manzanas_final.geometry, 
             locations=manzanas_final.index,
             color="uso_pot_simplificado", 
-            color_discrete_map=color_map, # APLICAMOS EL MAPA DE COLORES AQUÍ
+            color_discrete_map=color_map,
             mapbox_style="carto-positron", 
             zoom=14.5,
             center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            opacity=0.6, 
-            title="Vocación por Manzana",
-            hover_name="uso_pot_simplificado"
+            opacity=0.6,
+            title="Vocación del Suelo"
         )
         fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True)
         
-        # Dibujar perímetro del área seleccionada
+        # Línea de límite
         if 'area_interes' in locals():
              fig_p.add_trace(go.Scattermapbox(
                 lat=list(area_interes.exterior.xy[1]), 
                 lon=list(area_interes.exterior.xy[0]), 
                 mode='lines', 
                 line=dict(color='black', width=2), 
-                name='Límite Zona'
+                name='Zona'
             ))
         st.plotly_chart(fig_p, use_container_width=True)
 
     with col_data_pot:
-        # Estadísticas
         conteo = manzanas_final['uso_pot_simplificado'].value_counts()
         
-        # Mostrar gráfica solo si hay datos válidos (más allá de solo "Sin Clasificación")
-        datos_validos = not (len(conteo) == 1 and 'Sin Clasificación' in conteo)
+        # Verificar si hay datos reales
+        hay_datos = not (len(conteo) == 1 and 'Sin Clasificación' in conteo)
         
-        if clasificacion_exitosa and datos_validos:
+        if clasificacion_exitosa and hay_datos:
             moda = conteo.index[0]
-            st.success(f"Vocación Principal: **{moda}**")
+            st.info(f"Uso predominante: **{moda}**")
             
-            # Gráfico de Barras con los mismos colores del mapa
-            # Creamos una lista de colores en el mismo orden que las barras
-            colores_barras = [color_map[cat] for cat in conteo.index]
-
+            # Usar los mismos colores del mapa
+            colores_barras = [color_map.get(x, '#333') for x in conteo.index]
+            
             fig_bp = go.Figure(data=[go.Bar(
-                y=[str(x)[:20] for x in conteo.index], 
+                y=[str(x)[:25] for x in conteo.index], 
                 x=conteo.values, 
                 orientation='h',
-                marker_color=colores_barras # Usamos los mismos colores
+                marker_color=colores_barras
             )])
-            fig_bp.update_layout(
-                height=250, 
-                margin=dict(l=0,r=0,t=0,b=0), 
-                yaxis=dict(autorange="reversed")
-            )
+            fig_bp.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0), yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig_bp, use_container_width=True)
         else:
-            st.warning("No se identificó normativa específica (Zona gris).")
+            st.warning("⚠️ No se cruzó información.")
+            st.markdown("""
+            **Posibles causas:**
+            1. El dataset de 'Áreas' está vacío o no cubre esta zona.
+            2. Las coordenadas están desplazadas (revisa el CRS).
+            """)
+            # Botón de depuración
+            if st.checkbox("Ver datos crudos del POT"):
+                st.write(areas_pot.head())
 
     # -------------------------------------------------------------------------
     # CIERRE: SEGURIDAD Y HTML
