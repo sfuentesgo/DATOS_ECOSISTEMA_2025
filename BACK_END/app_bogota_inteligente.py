@@ -856,7 +856,50 @@ elif st.session_state.step == 5:
         {texto_seg}
     </div>
     """, unsafe_allow_html=True)
-
+# 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
+    st.success("✅ Informe Generado Correctamente")
+    
+    col_descarga, col_reinicio = st.columns([1, 1])
+    
+    with col_descarga:
+        # Inyección CSS para botón VERDE GRANDE
+        st.markdown("""
+            <style>
+            div.stDownloadButton > button {
+                background-color: #27AE60 !important;
+                color: white !important;
+                border: 1px solid #1E8449 !important;
+                border-radius: 8px !important;
+                padding: 15px 25px !important;
+                font-size: 18px !important;
+                font-weight: bold !important;
+                width: 100%;
+            }
+            div.stDownloadButton > button:hover {
+                background-color: #1E8449 !important;
+                color: #FDFEFE !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        st.download_button(
+            label="📥 DESCARGAR INFORME (PDF/HTML)",
+            data=st.session_state.informe_html,
+            file_name=f"Informe_Inversion_{manzana_id}.html",
+            mime="text/html"
+        )
+        
+    with col_reinicio:
+        # Espaciador visual para alinear botones
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Iniciar Nuevo Análisis", use_container_width=True):
+            # Limpieza profunda de variables
+            keys_to_clear = ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'manzana_sel', 'step']
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.step = 1 
+            st.rerun()
     
 # --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y PROFESIONAL) ---
 elif st.session_state.step == 7:
@@ -1040,47 +1083,3 @@ elif st.session_state.step == 7:
         # Guardamos el HTML generado en la sesión
         st.session_state.informe_html = html_content
 
-# 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
-    st.success("✅ Informe Generado Correctamente")
-    
-    col_descarga, col_reinicio = st.columns([1, 1])
-    
-    with col_descarga:
-        # Inyección CSS para botón VERDE GRANDE
-        st.markdown("""
-            <style>
-            div.stDownloadButton > button {
-                background-color: #27AE60 !important;
-                color: white !important;
-                border: 1px solid #1E8449 !important;
-                border-radius: 8px !important;
-                padding: 15px 25px !important;
-                font-size: 18px !important;
-                font-weight: bold !important;
-                width: 100%;
-            }
-            div.stDownloadButton > button:hover {
-                background-color: #1E8449 !important;
-                color: #FDFEFE !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-        
-        st.download_button(
-            label="📥 DESCARGAR INFORME (PDF/HTML)",
-            data=st.session_state.informe_html,
-            file_name=f"Informe_Inversion_{manzana_id}.html",
-            mime="text/html"
-        )
-        
-    with col_reinicio:
-        # Espaciador visual para alinear botones
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Iniciar Nuevo Análisis", use_container_width=True):
-            # Limpieza profunda de variables
-            keys_to_clear = ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'manzana_sel', 'step']
-            for key in keys_to_clear:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.step = 1 
-            st.rerun()
