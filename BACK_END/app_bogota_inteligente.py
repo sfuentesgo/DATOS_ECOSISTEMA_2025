@@ -184,9 +184,37 @@ if st.session_state.step == 1:
             st.error(f"Ocurrió un error técnico: {e}")
 
 # ==============================================================================
-# PASO 2: SELECCIÓN DE LOCALIDAD (DISEÑO BOGOTÁ)
+# PASO 2: SELECCIÓN DE LOCALIDAD (EXPERIENCIA MEJORADA)
 # ==============================================================================
 elif st.session_state.step == 2:
+    # --- INYECCIÓN CSS PARA BOTONES PERSONALIZADOS ---
+    st.markdown("""
+        <style>
+        /* Estilo para el botón PRINCIPAL (Verde) */
+        div.row-widget.stButton > button[kind="primary"] {
+            background-color: #27AE60 !important;
+            border-color: #27AE60 !important;
+            color: white !important;
+            font-size: 16px !important;
+            border-radius: 8px !important;
+            height: 50px !important; /* Altura fija para uniformidad */
+        }
+        div.row-widget.stButton > button[kind="primary"]:hover {
+            background-color: #2ECC71 !important;
+            transform: scale(1.02);
+        }
+
+        /* Estilo para el botón SECUNDARIO (Gris) */
+        div.row-widget.stButton > button[kind="secondary"] {
+            background-color: #95A5A6 !important;
+            border-color: #95A5A6 !important;
+            color: white !important;
+            border-radius: 8px !important;
+            height: 50px !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.header("🗺️ Paso 2: Ubica tu Localidad")
 
     col_mapa, col_datos = st.columns([3, 1])
@@ -198,21 +226,21 @@ elif st.session_state.step == 2:
         
         👉 **Haz clic en el mapa** sobre la zona que te interesa investigar.
         
-        De inmediato, te mostraremos una **Radiografía de Seguridad** para que sepas cuáles son los delitos más frecuentes allí antes de continuar.
+        El sistema te mostrará inmediatamente los **3 delitos más frecuentes** en esa zona para que conozcas el contexto real antes de seguir.
         """)
         
         st.markdown("---")
-        if st.button("⬅ Volver al Inicio", use_container_width=True):
+        # Botón de regreso (Gris - Secondary)
+        if st.button("⬅ Volver al Inicio", type="secondary", use_container_width=True):
             st.session_state.step = 1
             st.rerun()
 
     with col_mapa:
-        # --- PALETA DE COLORES BOGOTÁ ---
-        # Usamos el amarillo como base y rojo para destacar
-        COLOR_BASE = "#B99F37"     # Amarillo suave (Fondo)
-        COLOR_LINEA = "#201DBD"    # Gris elegante (Borde)
-        COLOR_HOVER = "#EC4835"    # Rojo Bogotá (Al pasar el mouse)
-        
+        # Colores Identidad Bogotá
+        COLOR_BASE = "#776314"     # Amarillo suave
+        COLOR_LINEA = "#1B0BA8"    # Gris
+        COLOR_HOVER = "#AA1A0F"    # Rojo Bogotá
+
         localidades = st.session_state.localidades
         centro_urbano = [4.6097, -74.0817] 
 
@@ -228,13 +256,13 @@ elif st.session_state.step == 2:
             style_function=lambda feature: {
                 "fillColor": COLOR_BASE,
                 "color": COLOR_LINEA,
-                "weight": 1,
+                "weight": 2,
                 "fillOpacity": 0.5,
             },
             highlight_function=lambda feature: {
                 "fillColor": COLOR_HOVER,
                 "color": "white",
-                "weight": 2,
+                "weight": 3,
                 "fillOpacity": 0.7,
             },
             tooltip=folium.GeoJsonTooltip(
@@ -279,18 +307,15 @@ elif st.session_state.step == 2:
                     # PROCESAMIENTO VISUAL DEL RANKING (LISTA LIMPIA)
                     st.markdown("**🚨 Top 3 Riesgos de Seguridad:**")
                     
-                    # Convertimos el texto plano en una lista visual atractiva
                     if "," in perfil_seguridad:
                         delitos = perfil_seguridad.split(",")
-                        # Usamos HTML simple para dar formato de lista limpia
                         html_lista = ""
-                        iconos = ["🥇", "🥈", "🥉"] # Medallas para el ranking
+                        iconos = ["🥇", "🥈", "🥉"] 
                         
                         for i, delito in enumerate(delitos):
-                            if i < 3: # Solo aseguramos top 3
-                                # Limpiamos el texto (quitamos el "1." que viene del ETL si es necesario)
+                            if i < 3: 
                                 texto_delito = delito.split(".")[-1].strip() if "." in delito else delito.strip()
-                                html_lista += f"<div style='margin-bottom:5px;'>{iconos[i]} <b>{texto_delito}</b></div>"
+                                html_lista += f"<div style='margin-bottom:5px; font-size:15px;'>{iconos[i]} <b>{texto_delito}</b></div>"
                         
                         st.markdown(html_lista, unsafe_allow_html=True)
                     else:
@@ -299,8 +324,8 @@ elif st.session_state.step == 2:
                 with col_res3:
                     st.write("") 
                     st.write("") 
-                    # Este botón ahora será VERDE gracias al CSS del principio
-                    if st.button("✅ Confirmar Zona", use_container_width=True):
+                    # Botón Verde Amigable (Primary)
+                    if st.button("🔍 Analizar esta Zona", type="primary", use_container_width=True):
                         st.session_state.localidad_sel = seleccion
                         st.session_state.step = 3
                         st.rerun()
