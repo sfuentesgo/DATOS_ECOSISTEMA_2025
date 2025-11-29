@@ -184,66 +184,68 @@ if st.session_state.step == 1:
             st.error(f"Ocurrió un error técnico: {e}")
 
 # ==============================================================================
-# PASO 2: SELECCIÓN DE UNIDAD ADMINISTRATIVA Y CONTEXTO
+# PASO 2: SELECCIÓN DE LOCALIDAD (DISEÑO BOGOTÁ)
 # ==============================================================================
 elif st.session_state.step == 2:
-    st.header("Fase 2: Delimitación del Área de Estudio")
+    st.header("🗺️ Paso 2: Ubica tu Localidad")
 
     col_mapa, col_datos = st.columns([3, 1])
 
     with col_datos:
-        st.markdown("### Instrucciones")
-        st.markdown("""
-        Seleccione en el visor geográfico la localidad objetivo.
+        st.markdown("### ¿Cómo funciona?")
+        st.info("""
+        Bogotá tiene 20 localidades, cada una con su propia identidad.
         
-        El sistema desplegará automáticamente el **Perfil de Seguridad 2024**, permitiéndole evaluar los riesgos predominantes antes de profundizar en el análisis de servicios.
+        👉 **Haz clic en el mapa** sobre la zona que te interesa investigar.
+        
+        De inmediato, te mostraremos una **Radiografía de Seguridad** para que sepas cuáles son los delitos más frecuentes allí antes de continuar.
         """)
         
-        # Botón de retorno seguro
         st.markdown("---")
         if st.button("⬅ Volver al Inicio", use_container_width=True):
             st.session_state.step = 1
             st.rerun()
 
     with col_mapa:
-        # Estilos corporativos para el visor
-        COLOR_FRAME = "#2C3E50"    # Gris oscuro profesional
-        COLOR_FILL = "#3498DB"     # Azul institucional
-        COLOR_HI_FILL = "#AED6F1"  # Azul claro para hover
-        COLOR_BORDER = "#E74C3C"   # Rojo alerta para selección
-
+        # --- PALETA DE COLORES BOGOTÁ ---
+        # Usamos el amarillo como base y rojo para destacar
+        COLOR_BASE = "#F9E79F"     # Amarillo suave (Fondo)
+        COLOR_LINEA = "#7F8C8D"    # Gris elegante (Borde)
+        COLOR_HOVER = "#E74C3C"    # Rojo Bogotá (Al pasar el mouse)
+        
         localidades = st.session_state.localidades
 
-        # Centrado dinámico del mapa basado en la geometría total
-        bounds = localidades.total_bounds
-        center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
+        # CORRECCIÓN DE CENTRADO:
+        # En lugar de calcular el centro geométrico (que se desvía a Sumapaz),
+        # fijamos el centro en la Plaza de Bolívar / Los Mártires.
+        centro_urbano = [4.6097, -74.0817] 
 
         m = folium.Map(
-            location=center, 
-            zoom_start=11, 
+            location=centro_urbano, 
+            zoom_start=11,  # Un zoom equilibrado para ver toda la mancha urbana
             tiles="CartoDB positron",
             control_scale=True
         )
         
-        # Capa GeoJSON interactiva
+        # Capa Interactiva con Estilo Ciudadano
         folium.GeoJson(
             localidades,
             style_function=lambda feature: {
-                "fillColor": COLOR_FILL,
-                "color": COLOR_FRAME,
-                "weight": 1.5,
-                "fillOpacity": 0.4,
+                "fillColor": COLOR_BASE,
+                "color": COLOR_LINEA,
+                "weight": 1,
+                "fillOpacity": 0.5,
             },
             highlight_function=lambda feature: {
+                "fillColor": COLOR_HOVER,  # Se pone rojo al tocar
+                "color": "white",
                 "weight": 3,
-                "color": COLOR_BORDER,
-                "fillColor": COLOR_HI_FILL,
-                "fillOpacity": 0.6,
+                "fillOpacity": 0.7,
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=["nombre_localidad"],
-                aliases=["Unidad Administrativa:"],
-                style="font-family: sans-serif; font-size: 12px;",
+                aliases=["Localidad:"],
+                style="font-family: sans-serif; font-size: 14px; color: #333;",
                 sticky=True
             )
         ).add_to(m)
@@ -251,23 +253,19 @@ elif st.session_state.step == 2:
         # Renderizado del mapa
         output = st_folium(m, width=None, height=550, returned_objects=["last_clicked"])
 
-    # --- Lógica de Detección de Selección y Perfilamiento ---
+    # --- Lógica de Selección Inteligente ---
     clicked = output.get("last_clicked")
-    
-    # Contenedor inferior para resultados de la selección
     contenedor_resultado = st.container()
 
     if clicked and "lat" in clicked and "lng" in clicked:
         punto = Point(clicked["lng"], clicked["lat"])
         
-        # Búsqueda espacial: ¿En qué polígono cayó el clic?
         seleccion = None
-        perfil_seguridad = "Sin información disponible"
+        perfil_seguridad = "Sin datos recientes"
         
         for _, row in localidades.iterrows():
             if row["geometry"].contains(punto):
                 seleccion = row["nombre_localidad"]
-                # Recuperamos el dato de valor que generamos en el ETL
                 if "top_3_delitos" in row:
                     perfil_seguridad = row["top_3_delitos"]
                 break
@@ -277,17 +275,20 @@ elif st.session_state.step == 2:
             
             with contenedor_resultado:
                 st.markdown("---")
+                # Diseño de tarjeta de resultados
                 col_res1, col_res2, col_res3 = st.columns([1, 2, 1])
                 
                 with col_res1:
-                    st.success(f"Selección: {seleccion}")
+                    st.markdown(f"### 📍 {seleccion}")
+                    st.caption("Localidad Seleccionada")
                 
                 with col_res2:
-                    # AQUÍ ESTÁ EL VALOR AGREGADO DE TU PROPUESTA
-                    st.warning(f"🚨 **Focos de Inseguridad Detectados:**\n\n{perfil_seguridad}")
+                    # Alerta visual con el Rojo de la identidad
+                    st.error(f"🚨 **Ojo al dato (Seguridad):**\n\n{perfil_seguridad}")
                 
                 with col_res3:
-                    if st.button("Confirmar y Analizar Entorno ➡", type="primary", use_container_width=True):
+                    st.write("") # Espacio para alinear
+                    if st.button("✅ Confirmar Zona", type="primary", use_container_width=True):
                         st.session_state.localidad_sel = seleccion
                         st.session_state.step = 3
                         st.rerun()
