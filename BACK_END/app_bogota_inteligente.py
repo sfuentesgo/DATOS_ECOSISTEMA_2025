@@ -489,14 +489,13 @@ elif st.session_state.step == 3:
 elif st.session_state.step == 5:
     st.header("📊 Resultados de tu Análisis")
 
-    # Resumen amigable
     st.info(f"""
     **Estás analizando:** Un radio de **{st.session_state.radio_analisis} metros** a la redonda.
     📍 **Punto exacto:** En la localidad de **{st.session_state.localidad_sel}**.
     """)
 
     # -------------------------------------------------------------------------
-    # 1. MOTOR DE CÁLCULO
+    # 1. MOTOR DE CÁLCULO ESPACIAL
     # -------------------------------------------------------------------------
     localidades = st.session_state.localidades
     manzanas    = st.session_state.manzanas
@@ -504,37 +503,22 @@ elif st.session_state.step == 5:
     colegios    = st.session_state.colegios
     areas_pot   = st.session_state.areas
 
-    # Buffer
+    # 1.1 Buffer Geodésico (El molde del análisis)
     punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
     gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
     gdf_buffer = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis).to_crs(epsg=4326)
     area_interes = gdf_buffer.iloc[0]
 
-    # Proyecciones
+    # 1.2 Asegurar Proyecciones (Para que todo coincida)
     if transporte.crs != "EPSG:4326": transporte = transporte.to_crs("EPSG:4326")
     if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
 
-    # Cruces Básicos
+    # 1.3 Cruces Espaciales (Filtrar lo que hay dentro del círculo)
     transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
-    colegios_zona   = colegios[colegios.geometry.intersects(area_interes)]
-    manzanas_zona   = manzanas[manzanas.geometry.intersects(area_interes)]
-
-    # --- LÓGICA AVM PARA POT (CRUCE ESPACIAL ENTRE MANZANAS Y POT) ---
-    # En lugar de usar la capa de áreas cruda, le pegamos el dato a las manzanas
-    manzanas_pot = gpd.GeoDataFrame()
-    uso_moda_pot = "Sin Clasificar"
-    
-    if not manzanas_zona.empty and not areas_pot.empty:
-        try:
-            # Join Espacial: Manzanas que tocan Areas POT
-            # 'inner' para quedarnos solo con lo que tiene dato
-            manzanas_pot = gpd.sjoin(manzanas_zona, areas_pot[['uso_pot_simplificado', 'geometry']], how='inner', predicate='intersects')
-            if not manzanas_pot.empty:
-                uso_moda_pot = manzanas_pot['uso_pot_simplificado'].mode()[0]
-        except Exception as e:
-            st.error(f"Error calculando POT: {e}")
+    colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
+    manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
 
     # -------------------------------------------------------------------------
     # SECCIÓN 1: MOVILIDAD
@@ -547,33 +531,43 @@ elif st.session_state.step == 5:
 
     with col_mapa_mov:
         fig_t = go.Figure()
+        # Zona
         fig_t.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', name='Zona', fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
         ))
+        # Estaciones
         if not transporte_zona.empty:
             fig_t.add_trace(go.Scattermapbox(
                 lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
-                mode='markers', name='Estaciones',
-                marker=dict(size=10, color='#E74C3C', symbol='circle'), # Círculo para asegurar render
+                mode='markers', name='Paraderos',
+                marker=dict(size=10, color='#E74C3C', symbol='circle'),
                 text=transporte_zona['nombre_estacion'], hoverinfo='text'
             ))
+        # Tú
         fig_t.add_trace(go.Scattermapbox(
             lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
         ))
         fig_t.update_layout(
-            mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True, legend=dict(orientation="h", y=1.1)
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True,
+            legend=dict(orientation="h", y=1.1)
         )
         st.plotly_chart(fig_t, use_container_width=True)
 
     with col_data_mov:
         cant_t = len(transporte_zona)
         st.metric("Puntos de Transporte", cant_t)
-        if cant_t > 5: st.success("✅ **Excelente Conectividad:** Muchas opciones de ruta.")
-        elif cant_t > 0: st.warning("⚠️ **Conectividad Media:** Transporte disponible.")
-        else: st.error("❌ **Zona Apartada:** Dependencia de vehículo particular.")
+        
+        if cant_t > 5:
+            st.success("✅ **Excelente Conectividad:**\nTienes muchas opciones de ruta cerca.")
+        elif cant_t > 0:
+            st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
+        else:
+            st.error("❌ **Zona Apartada:**\nDependerás de vehículo particular o caminatas largas.")
 
     # -------------------------------------------------------------------------
     # SECCIÓN 2: EDUCACIÓN
@@ -588,7 +582,8 @@ elif st.session_state.step == 5:
         fig_e = go.Figure()
         fig_e.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', name='Zona', fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#8E44AD', width=2)
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#8E44AD', width=2)
         ))
         if not colegios_zona.empty:
             fig_e.add_trace(go.Scattermapbox(
@@ -602,7 +597,8 @@ elif st.session_state.step == 5:
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
         ))
         fig_e.update_layout(
-            mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
             mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False
         )
         st.plotly_chart(fig_e, use_container_width=True)
@@ -610,10 +606,14 @@ elif st.session_state.step == 5:
     with col_data_edu:
         cant_c = len(colegios_zona)
         st.metric("Total Colegios", cant_c)
-        if cant_c > 3: st.success("✅ **Alta Oferta Educativa:** Variedad de opciones.")
-        elif cant_c > 0: st.info("ℹ️ **Oferta Moderada:** Colegios accesibles.")
-        else: st.error("❌ **Déficit Educativo:** Sin colegios cercanos.")
         
+        if cant_c > 3:
+            st.success("✅ **Alta Oferta Educativa:**\nVariedad de opciones para las familias.")
+        elif cant_c > 0:
+            st.info("ℹ️ **Oferta Moderada:**\nColegios accesibles en el sector.")
+        else:
+            st.error("❌ **Déficit Educativo:**\nNo se identifican colegios en el radio inmediato.")
+
         if not colegios_zona.empty:
             st.caption("Por tipo:")
             st.dataframe(colegios_zona['sector'].value_counts(), use_container_width=True)
@@ -623,7 +623,7 @@ elif st.session_state.step == 5:
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏘️ 3. ¿Cómo es el vecindario? (Estratos)")
-    st.markdown("Nivel socioeconómico predominante.")
+    st.markdown("Nivel socioeconómico predominante en las manzanas del sector.")
 
     if not manzanas_zona.empty:
         col_mapa_soc, col_data_soc = st.columns([2, 1])
@@ -649,17 +649,40 @@ elif st.session_state.step == 5:
         st.warning("Sin datos residenciales.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (CORREGIDO - LÓGICA MANZANA)
+    # SECCIÓN 4: POT (LÓGICA CORREGIDA: MANZANAS + CENTROIDES)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
-    st.markdown("Vocación normativa según el Decreto 555, proyectada sobre las manzanas.")
+    st.markdown("Vocación normativa proyectada sobre cada manzana.")
+
+    # 1. Preparar datos para el cruce (Manzanas de la zona)
+    manzanas_pot = manzanas_zona.copy()
+    
+    # 2. Calcular Centroides (Temporalmente en metros para precisión)
+    # El centroide representa mejor a la manzana que el polígono entero para asignar un uso único
+    manzanas_pot['centroid'] = manzanas_pot.to_crs(epsg=3116).centroid.to_crs(epsg=4326)
+    
+    # 3. Spatial Join: Manzanas (Puntos) vs Áreas POT (Polígonos)
+    # Usamos set_geometry para hacer el join usando el PUNTO central, no el polígono
+    try:
+        manzanas_pot = manzanas_pot.set_geometry('centroid')
+        manzanas_pot = gpd.sjoin(manzanas_pot, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='within')
+        
+        # Volvemos a poner la geometría original (el polígono) para poder pintarlo
+        # (Importante: sjoin a veces borra la geometría original si no se cuida)
+        manzanas_pot = manzanas_pot.set_geometry('geometry')
+        
+        # Rellenar vacíos
+        manzanas_pot['uso_pot_simplificado'] = manzanas_pot['uso_pot_simplificado'].fillna('Sin Clasificación')
+    except Exception as e:
+        st.error(f"Error técnico en cruce POT: {e}")
+        manzanas_pot = gpd.GeoDataFrame()
 
     if not manzanas_pot.empty:
         col_mapa_pot, col_data_pot = st.columns([2, 1])
         
         with col_mapa_pot:
-            # AHORA PINTAMOS MANZANAS (NO AREAS POT), COLOREADAS POR POT
+            # AHORA SÍ: Pintamos las MANZANAS coloreadas por su uso POT
             fig_p = px.choropleth_mapbox(
                 manzanas_pot, 
                 geojson=manzanas_pot.geometry, 
@@ -677,7 +700,8 @@ elif st.session_state.step == 5:
             st.plotly_chart(fig_p, use_container_width=True)
 
         with col_data_pot:
-            st.info(f"Vocación Principal: **{uso_moda_pot}**")
+            uso_moda = manzanas_pot['uso_pot_simplificado'].mode()[0]
+            st.info(f"Vocación Principal: **{uso_moda}**")
             
             conteo_uso = manzanas_pot['uso_pot_simplificado'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
@@ -699,7 +723,7 @@ elif st.session_state.step == 5:
     datos_loc = localidades[localidades['nombre_localidad'] == localidad_actual].iloc[0]
     seguridad_raw = datos_loc.get('top_3_delitos', 'Dato no disponible')
     
-    # Formato Lista
+    # Formato Lista para Seguridad
     if "," in seguridad_raw:
         items = seguridad_raw.split(",")
         lista_html = "".join([f"<li>{i.strip()}</li>" for i in items])
@@ -744,7 +768,7 @@ elif st.session_state.step == 5:
         <div class="box">
             <h3 class="title">2. Entorno</h3>
             <p><strong>Seguridad:</strong> {seguridad_raw}</p>
-            <p><strong>Vocación POT:</strong> {uso_moda_pot}</p>
+            <p><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}</p>
         </div>
         <div class="box">
             <h3 class="title">3. Servicios</h3>
@@ -765,7 +789,6 @@ elif st.session_state.step == 5:
                 if k in st.session_state: del st.session_state[k]
             st.session_state.step = 2
             st.rerun()
-
     # -------------------------------------------------------------------------
     # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
     # -------------------------------------------------------------------------
