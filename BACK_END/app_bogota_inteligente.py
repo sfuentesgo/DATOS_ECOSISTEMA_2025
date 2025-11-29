@@ -484,19 +484,19 @@ elif st.session_state.step == 3:
 
 
 # ==============================================================================
-# PASO 5: RESULTADOS DEL ANÁLISIS (DASHBOARD CIUDADANO)
+# PASO 5: RESULTADOS DEL ANÁLISIS (DASHBOARD FINAL)
 # ==============================================================================
 elif st.session_state.step == 5:
     st.header("📊 Resultados de tu Análisis")
 
-    # Resumen amigable en la parte superior
+    # Resumen amigable
     st.info(f"""
     **Estás analizando:** Un radio de **{st.session_state.radio_analisis} metros** a la redonda.
     📍 **Punto exacto:** En la localidad de **{st.session_state.localidad_sel}**.
     """)
 
     # -------------------------------------------------------------------------
-    # 1. MOTOR DE CÁLCULO (Invisible para el usuario)
+    # 1. MOTOR DE CÁLCULO (Con Red de Seguridad para POT)
     # -------------------------------------------------------------------------
     localidades = st.session_state.localidades
     manzanas = st.session_state.manzanas
@@ -510,55 +510,55 @@ elif st.session_state.step == 5:
     gdf_buffer = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis).to_crs(epsg=4326)
     area_interes = gdf_buffer.iloc[0]
 
-    # Asegurar Proyecciones (Corrección técnica)
+    # Asegurar Proyecciones
     if transporte.crs != "EPSG:4326": transporte = transporte.to_crs("EPSG:4326")
     if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
 
-    # Cruces Espaciales
+    # Cruces Espaciales Básicos
     transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
     colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
     manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
+    
+    # LÓGICA ROBUSTA PARA POT (Corrección del error reportado)
+    # 1. Intentamos cruzar con el buffer
     areas_zona = areas_pot[areas_pot.geometry.intersects(area_interes)]
+    
+    # 2. Si falla (está vacío), buscamos el polígono donde cae el punto exacto
+    if areas_zona.empty:
+        areas_zona = areas_pot[areas_pot.geometry.contains(punto_ref)]
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 1: MOVILIDAD (Corrección: Símbolo Círculo)
+    # SECCIÓN 1: MOVILIDAD
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🚌 1. ¿Qué tan fácil es moverse?")
     st.markdown("Analizamos qué opciones de transporte público (Transmilenio y SITP) tienes 'a la mano'.")
 
-    # Layout: Mapa grande a la izquierda, Datos clave a la derecha
     col_mapa_mov, col_data_mov = st.columns([2, 1])
 
     with col_mapa_mov:
         fig_t = go.Figure()
-
-        # Zona (Naranja suave)
+        # Zona
         fig_t.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
             mode='lines', fill='toself', name='Zona analizada',
             fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
         ))
-
-        # Estaciones (CORRECCIÓN: symbol='circle' para asegurar que se vean)
+        # Estaciones
         if not transporte_zona.empty:
             fig_t.add_trace(go.Scattermapbox(
-                lat=transporte_zona.geometry.y,
-                lon=transporte_zona.geometry.x,
-                mode='markers',
-                name='Paraderos',
-                marker=dict(size=10, color='#E74C3C', symbol='circle'), # Rojo visible
+                lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
+                mode='markers', name='Paraderos',
+                marker=dict(size=10, color='#E74C3C', symbol='circle'),
                 text=transporte_zona['nombre_estacion'], hoverinfo='text'
             ))
-
         # Tu punto
         fig_t.add_trace(go.Scattermapbox(
             lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
         ))
-
         fig_t.update_layout(
             mapbox_style="carto-positron", 
             mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
@@ -571,15 +571,16 @@ elif st.session_state.step == 5:
         cant_t = len(transporte_zona)
         st.metric("Puntos de Transporte", cant_t)
         
+        # Diagnóstico Cualitativo (Tu sugerencia)
         if cant_t > 5:
-            st.success("✅ **Excelente Conectividad:** Tienes muchas opciones de ruta cerca.")
+            st.success("✅ **Excelente Conectividad:**\nTienes muchas opciones de ruta cerca.")
         elif cant_t > 0:
-            st.warning("⚠️ **Conectividad Media:** Tienes transporte, pero quizás debas caminar un poco.")
+            st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
         else:
-            st.error("❌ **Zona Apartada:** Dependerás de vehículo particular o caminatas largas.")
+            st.error("❌ **Zona Apartada:**\nDependerás de vehículo particular o caminatas largas.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 2: EDUCACIÓN
+    # SECCIÓN 2: EDUCACIÓN (MEJORADA CON DIAGNÓSTICO)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏫 2. ¿Dónde pueden estudiar tus hijos?")
@@ -589,13 +590,11 @@ elif st.session_state.step == 5:
 
     with col_mapa_edu:
         fig_e = go.Figure()
-        # Zona (Morado suave)
         fig_e.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
             mode='lines', fill='toself', name='Zona analizada',
             fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#8E44AD', width=2)
         ))
-        # Colegios
         if not colegios_zona.empty:
             fig_e.add_trace(go.Scattermapbox(
                 lat=colegios_zona.geometry.y, lon=colegios_zona.geometry.x,
@@ -603,7 +602,6 @@ elif st.session_state.step == 5:
                 marker=dict(size=9, color='#8E44AD', symbol='circle'),
                 text=colegios_zona['nombre'], hoverinfo='text'
             ))
-        # Tu punto
         fig_e.add_trace(go.Scattermapbox(
             lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
@@ -616,7 +614,17 @@ elif st.session_state.step == 5:
         st.plotly_chart(fig_e, use_container_width=True)
 
     with col_data_edu:
-        st.metric("Total Colegios", len(colegios_zona))
+        cant_c = len(colegios_zona)
+        st.metric("Total Colegios", cant_c)
+        
+        # NUEVO: Diagnóstico Educativo (Tu solicitud)
+        if cant_c > 3:
+            st.success("✅ **Alta Oferta Educativa:**\nVariedad de opciones para las familias en el sector.")
+        elif cant_c > 0:
+            st.info("ℹ️ **Oferta Moderada:**\nHay colegios accesibles, aunque la variedad puede ser limitada.")
+        else:
+            st.error("❌ **Déficit Educativo:**\nNo se identifican colegios en el radio inmediato.")
+
         if not colegios_zona.empty:
             st.caption("Distribución por tipo:")
             conteo = colegios_zona['sector'].value_counts().reset_index()
@@ -653,7 +661,6 @@ elif st.session_state.step == 5:
             moda_estrato = manzanas_zona['estrato'].mode()[0]
             st.info(f"El estrato más común es el **{moda_estrato}**.")
             
-            # Gráfico de barras simple
             conteo_est = manzanas_zona['estrato'].value_counts().sort_index()
             fig_b = go.Figure(data=[go.Bar(
                 x=[f"E{i}" for i in conteo_est.index], y=conteo_est.values,
@@ -665,7 +672,7 @@ elif st.session_state.step == 5:
         st.warning("No hay datos de vivienda en esta zona (puede ser parque o industrial).")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (USOS DEL SUELO)
+    # SECCIÓN 4: POT (CORREGIDO PARA GARANTIZAR DATOS)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
@@ -689,10 +696,9 @@ elif st.session_state.step == 5:
             st.plotly_chart(fig_p, use_container_width=True)
 
         with col_data_pot:
-            moda_uso = areas_zona['uso_pot_simplificado'].mode()[0]
-            st.info(f"La vocación principal es: **{moda_uso}**")
+            uso_moda = areas_zona['uso_pot_simplificado'].mode()[0]
+            st.info(f"La vocación principal es: **{uso_moda}**")
             
-            # Barras horizontales
             conteo_uso = areas_zona['uso_pot_simplificado'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
                 y=[l[:15] for l in conteo_uso.index], x=conteo_uso.values, orientation='h',
@@ -701,10 +707,10 @@ elif st.session_state.step == 5:
             fig_bp.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_bp, use_container_width=True)
     else:
-        st.warning("Sin datos de normativa específica.")
+        st.warning("⚠️ No se encontró normativa POT. Es posible que el punto esté en una vía principal o parque no zonificado.")
 
     # -------------------------------------------------------------------------
-    # CIERRE: CONTEXTO DE SEGURIDAD + DESCARGA
+    # CIERRE: SEGURIDAD (FORMATO LISTA) Y REPORTE HTML
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🛡️ Contexto de Seguridad")
@@ -712,21 +718,37 @@ elif st.session_state.step == 5:
     # Recuperar datos
     localidad_actual = st.session_state.localidad_sel
     datos_loc = localidades[localidades['nombre_localidad'] == localidad_actual].iloc[0]
-    seguridad = datos_loc.get('top_3_delitos', 'Dato no disponible')
+    seguridad_raw = datos_loc.get('top_3_delitos', 'Dato no disponible')
     
-    st.error(f"**Ten en cuenta:** En {localidad_actual}, los delitos más reportados son: {seguridad}")
+    # FORMATO LISTA PARA SEGURIDAD (Tu solicitud)
+    if "," in seguridad_raw:
+        items_seguridad = seguridad_raw.split(",")
+        lista_html = ""
+        for item in items_seguridad:
+            lista_html += f"<li>{item.strip()}</li>"
+        texto_seguridad_final = f"<ul>{lista_html}</ul>"
+    else:
+        texto_seguridad_final = seguridad_raw
+
+    # Usamos HTML directo para mostrar la lista bonita en pantalla
+    st.markdown(f"""
+    <div style="background-color: #FDEDEC; padding: 15px; border-left: 5px solid #C0392B; border-radius: 5px;">
+        <h4 style="color: #922B21; margin:0;">🚨 Ten en cuenta:</h4>
+        <p>En <b>{localidad_actual}</b>, los delitos más reportados son:</p>
+        {texto_seguridad_final}
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
     
     # Botones finales
-    # Link a Google Maps para el reporte
     gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
     
     # HTML Simplificado para reporte
     html = f"""
     <h3>Reporte Bogotá Inteligente</h3>
     <p><strong>Ubicación:</strong> {localidad_actual}</p>
-    <p><strong>Seguridad:</strong> {seguridad}</p>
+    <p><strong>Seguridad:</strong> {seguridad_raw}</p>
     <p><strong>Transporte:</strong> {len(transporte_zona)} estaciones.</p>
     <p><strong>Colegios:</strong> {len(colegios_zona)} instituciones.</p>
     <p><a href="{gmaps}">Ver en Google Maps</a></p>
@@ -741,7 +763,7 @@ elif st.session_state.step == 5:
                 if k in st.session_state: del st.session_state[k]
             st.session_state.step = 2
             st.rerun()
-            
+
     # -------------------------------------------------------------------------
     # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
     # -------------------------------------------------------------------------
