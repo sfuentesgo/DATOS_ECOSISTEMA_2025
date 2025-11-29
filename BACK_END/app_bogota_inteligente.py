@@ -858,17 +858,16 @@ elif st.session_state.step == 5:
     """, unsafe_allow_html=True)
 
     
-# --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y CORREGIDO) ---
+# --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y COMPLETO) ---
 elif st.session_state.step == 7:
+    import base64  # Importación dentro del bloque
+    
     st.header("📑 Generación del Informe Ejecutivo")
     
-    # 1. RECUPERACIÓN SEGURA DE DATOS (Para evitar NameError)
+    # 1. RECUPERACIÓN SEGURA DE DATOS
     try:
         manzana_id = st.session_state.manzana_sel
-        # Recuperamos el DF completo de la localidad desde la memoria
         gdf_completo = st.session_state.manzanas_localidad_sel 
-        
-        # Filtramos la manzana específica
         manzana_sel = gdf_completo[gdf_completo["id_manzana_unif"] == manzana_id].copy()
         
         if manzana_sel.empty:
@@ -879,76 +878,67 @@ elif st.session_state.step == 7:
         st.error("⚠️ Faltan datos en memoria. Por favor reinicia el análisis.")
         st.stop()
 
+    # 2. GENERACIÓN DEL HTML (Solo si no existe ya)
     with st.spinner('🎨 Maquetando informe de alta gerencia...'):
-        import base64
         
-        # --- A. PREPARAR DATOS DEL TEXTO ---
-        # Datos Generales
+        # --- A. PREPARAR DATOS ---
         barrio = manzana_sel.get('nombre_barrio', 'Sin Dato').values[0] if 'nombre_barrio' in manzana_sel.columns else st.session_state.nombre_localidad
         estrato = manzana_sel['estrato'].values[0]
         area_pot = manzana_sel['codigo_area_pot'].values[0] if 'codigo_area_pot' in manzana_sel.columns else "Área General"
         uso_suelo = manzana_sel['uso_pot_simplificado'].values[0]
-        
-        # Datos Financieros (Manejo de errores si faltan columnas)
         valor_m2 = manzana_sel['valor_m2'].values[0]
         rentabilidad = manzana_sel['rentabilidad'].values[0] if 'rentabilidad' in manzana_sel.columns else 0
         
-        # Proyección (Si existe)
+        # Proyección
         if 'valor_2026_s2' in manzana_sel.columns:
             valor_futuro = manzana_sel['valor_2026_s2'].values[0]
             crecimiento = ((valor_futuro - valor_m2) / valor_m2) * 100
         else:
             crecimiento = 0
 
-        # --- B. LÓGICA DEL DICTAMEN (SCORING) ---
+        # --- B. SCORING ---
         score = 0
         razones = []
-        
-        # 1. Rentabilidad / Valorización
         if rentabilidad > 0.005: 
             score += 1
             razones.append("Rentabilidad superior al promedio")
         if crecimiento > 8: 
-            score += 2 # Pesa doble
+            score += 2
             razones.append(f"Alta proyección de valorización (+{crecimiento:.1f}%)")
-            
-        # 2. Entorno y Servicios
+        
         colegios = int(manzana_sel['colegio_cerca'].values[0]) if 'colegio_cerca' in manzana_sel.columns else 0
         estaciones = int(manzana_sel['estaciones_cerca'].values[0]) if 'estaciones_cerca' in manzana_sel.columns else 0
         
         if colegios > 0 and estaciones > 0:
             score += 1
-            razones.append("Excelente conectividad y servicios educativos")
+            razones.append("Excelente conectividad y servicios")
 
-        # Definir resultado
         if score >= 3:
             dictamen_titulo = "OPORTUNIDAD DE INVERSIÓN ALTA"
-            dictamen_color = "#27AE60" # Verde
-            dictamen_desc = "Activo con alto potencial de retorno y bajo riesgo normativo."
+            dictamen_color = "#27AE60" 
+            dictamen_desc = "Activo con alto potencial de retorno y bajo riesgo."
         elif score >= 1:
             dictamen_titulo = "VIABILIDAD MEDIA"
-            dictamen_color = "#F39C12" # Naranja
-            dictamen_desc = "Activo estable. Se recomienda negociación estratégica."
+            dictamen_color = "#F39C12" 
+            dictamen_desc = "Activo estable. Se recomienda negociación."
         else:
             dictamen_titulo = "VIABILIDAD RESTRINGIDA"
-            dictamen_color = "#C0392B" # Rojo
+            dictamen_color = "#C0392B" 
             dictamen_desc = "Proyección limitada a corto plazo."
 
-        # --- C. RECUPERAR IMÁGENES DE PASOS ANTERIORES ---
+        # --- C. IMÁGENES ---
         def get_img(key):
             if key in st.session_state and st.session_state[key] is not None:
                 st.session_state[key].seek(0)
                 return base64.b64encode(st.session_state[key].read()).decode('utf-8')
-            return "" # Retorna vacío si falla
+            return ""
 
         img_transporte = get_img('buffer_transporte')
         img_pot_pie = get_img('buffer_dist_pot') 
         img_proyeccion = get_img('buffer_proyeccion')
         img_seguridad = get_img('buffer_seguridad')
-        # Si tienes el mapa general guardado:
-        img_mapa_gral = get_img('buffer_manzanas') 
 
-        # --- D. HTML A DOS COLUMNAS ---
+        # --- D. HTML ---
         html_content = f"""
         <!DOCTYPE html>
         <html lang="es">
@@ -985,23 +975,21 @@ elif st.session_state.step == 7:
                     <p>El inmueble se ubica en el barrio <strong>{barrio}</strong>, estrato <strong>{estrato}</strong>.</p>
                     <div class="stat">🚇 Estaciones TM cercanas: {estaciones}</div>
                     <div class="stat">🏫 Colegios cercanos: {colegios}</div>
-                    <p>La conectividad de la zona garantiza accesibilidad y flujo peatonal, factores clave para la valorización.</p>
                 </div>
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_transporte}">
-                    <div class="caption">Contexto de Movilidad (Radio 800m)</div>
+                    <div class="caption">Contexto de Movilidad</div>
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_pot_pie}">
-                    <div class="caption">Distribución de Usos del Suelo</div>
+                    <div class="caption">Usos del Suelo</div>
                 </div>
                 <div class="col-text">
                     <h2>2. Análisis Normativo</h2>
-                    <p>La normativa vigente asigna el uso principal: <strong>{uso_suelo}</strong>.</p>
-                    <p>El gráfico adjunto muestra la predominancia de actividades en el sector, lo que define la vocación comercial o residencial del entorno.</p>
+                    <p>Uso principal asignado: <strong>{uso_suelo}</strong>.</p>
                 </div>
             </div>
 
@@ -1010,11 +998,10 @@ elif st.session_state.step == 7:
                     <h2>3. Proyección Financiera</h2>
                     <div class="stat">💰 Valor m² Actual: ${valor_m2:,.0f}</div>
                     <div class="stat">📈 Crecimiento (24 meses): {crecimiento:.1f}%</div>
-                    <p>El modelo predictivo sugiere una tendencia favorable basada en el comportamiento histórico y las obras proyectadas en la zona.</p>
                 </div>
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_proyeccion}">
-                    <div class="caption">Curva de Valorización 2024-2026</div>
+                    <div class="caption">Curva de Valorización</div>
                 </div>
             </div>
             
@@ -1024,7 +1011,7 @@ elif st.session_state.step == 7:
                 </div>
                 <div class="col-text">
                     <h2>4. Contexto de Seguridad</h2>
-                    <p>Análisis comparativo de delitos de alto impacto. Este indicador es fundamental para definir estrategias de operación y aseguramiento del activo.</p>
+                    <p>Incidencia delictiva comparada por localidad.</p>
                 </div>
             </div>
 
@@ -1038,7 +1025,7 @@ elif st.session_state.step == 7:
         """
         st.session_state.informe_html = html_content
 
-    # 3. BOTONES DE ACCIÓN
+    # 3. AQUÍ ESTABAN LOS BOTONES PERDIDOS
     st.success("✅ Informe Generado Correctamente")
     
     col1, col2 = st.columns([1,1])
@@ -1046,6 +1033,7 @@ elif st.session_state.step == 7:
     with col1:
         # Estilo para botón verde
         st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; border: none; padding: 12px 25px;}</style>""", unsafe_allow_html=True)
+        
         st.download_button(
             label="📥 Descargar Informe (PDF/HTML)",
             data=st.session_state.informe_html,
