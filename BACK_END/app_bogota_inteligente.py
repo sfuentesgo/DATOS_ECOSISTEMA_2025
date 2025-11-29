@@ -120,7 +120,7 @@ if st.session_state.step == 1:
                 # Botón de acción centrado y profesional
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
-                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True, color="green"):
+                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True, color="#3498DB"):
                         st.session_state.step = 2
                         st.rerun()
             else:
