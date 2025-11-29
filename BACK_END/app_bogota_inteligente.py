@@ -857,22 +857,36 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 # -------------------------------------------------------------------------
-    # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
     # -------------------------------------------------------------------------
+# 5. REPORTE HTML (CON IMÁGENES Y BOTÓN VERDE)
+# -------------------------------------------------------------------------
+if st.session_state.step == 5: # O el número de paso que corresponda en tu flujo
+    import base64
+    import plotly.express as px
+    import plotly.graph_objects as go
+
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # Cálculos previos
+    # --- 1. PREPARACIÓN DE DATOS (Recuperamos variables) ---
+    # Asumimos que manzanas_zona, transporte_zona y colegios_zona ya existen por los pasos anteriores
+    
+    # Cálculos básicos
     poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
     total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
     pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
     
-    # Datos cualitativos
+    # Datos de seguridad
     datos_loc = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].iloc[0]
     perfil_seguridad = datos_loc.get('top_3_delitos', 'No disponible')
     
-    # Enlace a Google Maps
+    # Enlace Maps
     link_gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
+
+    # Moda del uso del suelo
+    uso_moda = "Sin Clasificación"
+    if not manzanas_zona.empty and 'uso_pot_simplificado' in manzanas_zona.columns:
+        uso_moda = manzanas_zona['uso_pot_simplificado'].mode()[0]
 
     # Scoring
     score = 0
@@ -883,17 +897,54 @@ elif st.session_state.step == 5:
     dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
     color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
 
-    # HTML Template
+    # --- 2. GENERACIÓN DE IMÁGENES PARA EL REPORTE ---
+    with st.spinner("Generando gráficos para el informe..."):
+        
+        # A. IMAGEN DEL MAPA
+        # Creamos un mapa estático rápido de las manzanas seleccionadas
+        fig_mapa = px.choropleth_mapbox(
+            manzanas_zona,
+            geojson=manzanas_zona.geometry,
+            locations=manzanas_zona.index,
+            color="uso_pot_simplificado" if "uso_pot_simplificado" in manzanas_zona.columns else None,
+            mapbox_style="carto-positron",
+            zoom=14,
+            center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            opacity=0.6
+        )
+        fig_mapa.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+        # Convertir a Base64
+        img_bytes_mapa = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
+        b64_mapa = base64.b64encode(img_bytes_mapa).decode('utf-8')
+
+        # B. IMAGEN DE GRÁFICA (Distribución de usos)
+        if not manzanas_zona.empty and 'uso_pot_simplificado' in manzanas_zona.columns:
+            conteo = manzanas_zona['uso_pot_simplificado'].value_counts()
+            fig_bar = px.bar(x=conteo.values, y=conteo.index, orientation='h', labels={'x':'Cantidad', 'y':'Uso'})
+            fig_bar.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=250, plot_bgcolor='rgba(0,0,0,0)')
+            
+            img_bytes_bar = fig_bar.to_image(format="png", width=600, height=250, scale=2)
+            b64_bar = base64.b64encode(img_bytes_bar).decode('utf-8')
+        else:
+            b64_bar = "" # Si no hay datos, imagen vacía
+
+    # --- 3. PLANTILLA HTML CON IMÁGENES ---
     html_report = f"""
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
-            body {{ font-family: sans-serif; color: #333; }}
-            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
-            .box {{ background: #F4F6F6; padding: 15px; margin: 10px 0; border: 1px solid #BDC3C7; }}
-            .alert {{ background: #FADBD8; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; }}
-            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }}
+            body {{ font-family: 'Helvetica', sans-serif; color: #333; max-width: 800px; margin: 0 auto; }}
+            .header {{ background: linear-gradient(90deg, #2C3E50 0%, #34495E 100%); color: white; padding: 25px; text-align: center; border-radius: 0 0 10px 10px; }}
+            .section {{ margin-top: 25px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }}
+            .alert {{ background: #FDEDEC; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; margin-top: 10px; }}
+            .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }}
+            .stat-box {{ background: #EAEDED; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }}
+            .img-container {{ text-align: center; margin: 20px 0; }}
+            img {{ max-width: 100%; border: 1px solid #ccc; border-radius: 5px; }}
+            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-size: 12px; margin-top: 5px; }}
+            .dictamen {{ background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; margin-top: 30px; border-radius: 8px; }}
         </style>
     </head>
     <body>
@@ -902,49 +953,83 @@ elif st.session_state.step == 5:
             <p>Bogotá Inteligente - Datos al Ecosistema 2025</p>
         </div>
         
-        <div class="box">
-            <h3>📍 Ubicación del Análisis</h3>
-            <p><strong>Localidad:</strong> {st.session_state.localidad_sel}</p>
-            <p><strong>Coordenadas:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
-            <a href="{link_gmaps}" target="_blank" class="btn-map">🗺️ Ver Ubicación en Google Maps</a>
+        <div class="section">
+            <h2 style="border-bottom: 2px solid #2C3E50;">📍 1. Ubicación y Contexto</h2>
+            <p><strong>Localidad:</strong> {st.session_state.localidad_sel} | <strong>Radio:</strong> {st.session_state.radio_analisis}m</p>
+            <p>Coordenadas: {st.session_state.punto_lat:.4f}, {st.session_state.punto_lon:.4f}</p>
+            
+            <div class="img-container">
+                <img src="data:image/png;base64,{b64_mapa}" alt="Mapa de la zona">
+                <p><em>Figura 1. Manzanas analizadas en el radio de influencia.</em></p>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="{link_gmaps}" target="_blank" class="btn-map">🗺️ Abrir ubicación en Google Maps</a>
+            </div>
         </div>
 
-        <div class="box">
-            <h3>🚨 Seguridad y Convivencia</h3>
-            <div class="alert"><strong>Focos de Delito (Top 3):</strong><br>{perfil_seguridad}</div>
+        <div class="section">
+            <h2 style="border-bottom: 2px solid #2C3E50;">📊 2. Análisis de Cobertura y Usos</h2>
+            <div class="stat-grid">
+                <div class="stat-box">🚇 {len(transporte_zona)} Estaciones TM<br><small>Cobertura: {pct_cobertura_trans:.1f}%</small></div>
+                <div class="stat-box">🏫 {len(colegios_zona)} Colegios<br><small>En radio cercano</small></div>
+            </div>
+            
+            <h3>Distribución Normativa (POT)</h3>
+            <p>El uso predominante en la zona es: <strong>{uso_moda}</strong></p>
+            <div class="img-container">
+                <img src="data:image/png;base64,{b64_bar}" alt="Gráfica de Usos">
+            </div>
         </div>
 
-        <div class="box">
-            <h3>📊 Indicadores de Cobertura ({st.session_state.radio_analisis}m)</h3>
-            <ul>
-                <li><strong>Transporte:</strong> {len(transporte_zona)} estaciones ({pct_cobertura_trans:.1f}% de la localidad).</li>
-                <li><strong>Educación:</strong> {len(colegios_zona)} colegios.</li>
-                <li><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}.</li>
-            </ul>
+        <div class="section">
+            <h2 style="border-bottom: 2px solid #C0392B;">🚨 3. Seguridad</h2>
+            <div class="alert">
+                <strong>Focos de Delito Reportados (Top 3):</strong><br>
+                {perfil_seguridad}
+            </div>
         </div>
         
-        <div style="background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 20px; margin-top: 20px;">
+        <div class="dictamen">
             DICTAMEN: {dictamen_texto}
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; color: #777; font-size: 12px;">
+            Generado automáticamente el 28/11/2025
         </div>
     </body>
     </html>
     """
 
+    # --- 4. BOTONES (DESCARGA VERDE Y REINICIO) ---
     col_btn_html, col_reset = st.columns([2, 1])
     
     with col_btn_html:
+        # Inyectamos CSS específico para hacer este botón verde
+        st.markdown("""
+            <style>
+            div.stDownloadButton > button {
+                background-color: #27AE60 !important;
+                color: white !important;
+                border: 1px solid #1E8449 !important;
+            }
+            div.stDownloadButton > button:hover {
+                background-color: #196F3D !important;
+                border-color: #145A32 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         st.download_button(
-            label="📥 Descargar Informe Ejecutivo (HTML)",
+            label="📥 Descargar Informe Completo (HTML)",
             data=html_report,
             file_name=f"Reporte_{st.session_state.localidad_sel}.html",
-            mime="text/html",
-            type="primary"
+            mime="text/html"
         )
     
     with col_reset:
         if st.button("🔄 Iniciar Nuevo Análisis"):
-            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
+            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'step']:
                 if key in st.session_state: del st.session_state[key]
-            st.session_state.step = 2
             st.rerun()
 
