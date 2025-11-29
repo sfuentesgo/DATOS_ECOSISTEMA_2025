@@ -657,56 +657,67 @@ elif st.session_state.step == 5:
         st.warning("Sin datos residenciales.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (LÓGICA BLINDADA: SEPARACIÓN DE GEOMETRÍAS)
+    # SECCIÓN 4: POT (LÓGICA BLINDADA V2)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
     st.markdown("Vocación normativa proyectada sobre cada manzana del sector.")
 
-    # 1. Copia de seguridad de las manzanas originales (Polígonos)
-    # Usaremos esto para pintar el mapa final, así aseguramos que no desaparezcan.
+    # 1. Copia de seguridad
     manzanas_final = manzanas_zona.copy()
-    
-    # Variable de control para saber si logramos clasificar
     clasificacion_exitosa = False
 
     if not manzanas_final.empty and not areas_pot.empty:
         try:
-            # 2. Reparación de geometrías del POT (Por si acaso)
+            # --- PASO CRÍTICO DE SEGURIDAD ---
+            # Aseguramos que el mapa de POT esté en el mismo sistema que las manzanas.
+            # Si las manzanas están en 4326, forzamos al POT a ser 4326.
+            if areas_pot.crs != manzanas_final.crs:
+                areas_pot = areas_pot.to_crs(manzanas_final.crs)
+
+            # 2. Reparación de geometrías (Buffer 0 arregla polígonos inválidos)
             areas_pot['geometry'] = areas_pot.geometry.buffer(0)
 
-            # 3. Creamos un GeoDataFrame TEMPORAL solo de puntos (Centroides)
-            # Esto evita dañar los polígonos originales
+            # 3. Cálculo de Centroides
+            # Truco: Proyectamos a metros (3116) solo para calcular el centro exacto, 
+            # y devolvemos al sistema original (crs de manzanas)
             puntos_temp = manzanas_final.copy()
-            puntos_temp['geometry'] = puntos_temp.to_crs(epsg=3116).centroid.to_crs(epsg=4326)
+            puntos_temp['geometry'] = puntos_temp.to_crs(epsg=3116).centroid.to_crs(manzanas_final.crs)
             
-            # 4. Cruce Espacial: Puntos vs Áreas POT
-            # Usamos 'inner' para ver qué puntos caen dentro de qué áreas
-            cruce = gpd.sjoin(puntos_temp, areas_pot[['uso_pot_simplificado', 'geometry']], how='inner', predicate='intersects')
+            # 4. Cruce Espacial DIRECTO
+            # Usamos 'left': Mantenemos todas las manzanas, si no cruzan quedan con NaN
+            cruce = gpd.sjoin(
+                puntos_temp, 
+                areas_pot[['uso_pot_simplificado', 'geometry']], 
+                how='left', 
+                predicate='within' # 'within' es más preciso para puntos que 'intersects'
+            )
             
-            # 5. Eliminamos duplicados (por si un punto cae en dos áreas, nos quedamos con la primera)
+            # 5. Eliminamos duplicados generados por el join
+            # (Si un punto cae justo en la línea de dos áreas, tomamos el primero)
             cruce = cruce[~cruce.index.duplicated(keep='first')]
             
-            # 6. Pasamos el dato encontrado al mapa original (Join por Índice)
+            # 6. Asignación directa (Pandas alinea por índice automáticamente)
             manzanas_final['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
             
-            # Rellenamos lo que no cruzó
+            # Rellenamos nulos
             manzanas_final['uso_pot_simplificado'] = manzanas_final['uso_pot_simplificado'].fillna('Sin Clasificación')
             
             clasificacion_exitosa = True
             
         except Exception as e:
-            st.error(f"Nota técnica: No se pudo clasificar el suelo ({str(e)}). Se muestran manzanas base.")
+            st.error(f"Error en el cálculo espacial: {str(e)}")
             manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
     else:
         manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
 
-    # 7. VISUALIZACIÓN (Siempre se ejecuta, tenga o no datos del POT)
+    # 7. VISUALIZACIÓN (Igual que antes)
     col_mapa_pot, col_data_pot = st.columns([2, 1])
     
     with col_mapa_pot:
-        # Definimos colores fijos para que se vea bonito
-        # Si todo es "Sin Clasificación", saldrá gris.
+        # Colores dinámicos: Si solo hay "Sin Clasificación", usamos gris.
+        map_color = {'Sin Clasificación': '#95A5A6'}
+        
         fig_p = px.choropleth_mapbox(
             manzanas_final, 
             geojson=manzanas_final.geometry, 
@@ -717,38 +728,39 @@ elif st.session_state.step == 5:
             center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
             opacity=0.6, 
             title="Vocación por Manzana",
-            color_discrete_map={'Sin Clasificación': '#95A5A6'} # Gris por defecto
+            color_discrete_map=map_color # Plotly usará colores default para las otras categorías
         )
         fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True)
         
-        # Borde del área
-        fig_p.add_trace(go.Scattermapbox(
-            lat=list(area_interes.exterior.xy[1]), 
-            lon=list(area_interes.exterior.xy[0]), 
-            mode='lines', 
-            line=dict(color='black', width=2), 
-            name='Límite'
-        ))
+        # Borde del área seleccionada
+        if 'area_interes' in locals():
+             fig_p.add_trace(go.Scattermapbox(
+                lat=list(area_interes.exterior.xy[1]), 
+                lon=list(area_interes.exterior.xy[0]), 
+                mode='lines', 
+                line=dict(color='black', width=2), 
+                name='Límite'
+            ))
         st.plotly_chart(fig_p, use_container_width=True)
 
     with col_data_pot:
         # Estadísticas
         conteo = manzanas_final['uso_pot_simplificado'].value_counts()
         
-        if clasificacion_exitosa and len(conteo) > 0:
+        if clasificacion_exitosa and not (len(conteo) == 1 and 'Sin Clasificación' in conteo):
             moda = conteo.index[0]
-            st.info(f"Vocación Principal: **{moda}**")
+            st.success(f"Vocación Principal: **{moda}**")
             
             fig_bp = go.Figure(data=[go.Bar(
-                y=[l[:20] for l in conteo.index], 
+                y=[str(x)[:20] for x in conteo.index], # Recortamos nombres largos
                 x=conteo.values, 
                 orientation='h',
                 marker_color='#1ABC9C'
             )])
-            fig_bp.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0))
+            fig_bp.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0), yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig_bp, use_container_width=True)
         else:
-            st.warning("No se identificó normativa específica para las manzanas seleccionadas.")
+            st.warning("No se identificó normativa específica para esta zona.")
 
     # -------------------------------------------------------------------------
     # CIERRE: SEGURIDAD Y HTML
