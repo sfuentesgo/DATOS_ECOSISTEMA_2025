@@ -857,10 +857,10 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-# 5. REPORTE HTML (CON IMÁGENES Y BOTÓN VERDE)
+# 5. REPORTE HTML (BLINDADO Y FINAL)
 # -------------------------------------------------------------------------
-if st.session_state.step == 5: # O el número de paso que corresponda en tu flujo
+# Asegúrate de que este 'if' coincida con tu número de paso actual (ej. 5 o 7)
+if st.session_state.step == 5: 
     import base64
     import plotly.express as px
     import plotly.graph_objects as go
@@ -868,10 +868,8 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # --- 1. PREPARACIÓN DE DATOS (Recuperamos variables) ---
-    # Asumimos que manzanas_zona, transporte_zona y colegios_zona ya existen por los pasos anteriores
-    
-    # Cálculos básicos
+    # --- 1. PREPARACIÓN DE DATOS ---
+    # Cálculos espaciales básicos
     poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
     total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
     pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
@@ -883,12 +881,7 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
     # Enlace Maps
     link_gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
 
-    # Moda del uso del suelo
-    uso_moda = "Sin Clasificación"
-    if not manzanas_zona.empty and 'uso_pot_simplificado' in manzanas_zona.columns:
-        uso_moda = manzanas_zona['uso_pot_simplificado'].mode()[0]
-
-    # Scoring
+    # Scoring y Dictamen
     score = 0
     if len(transporte_zona) >= 3: score += 1
     if len(colegios_zona) >= 2: score += 1
@@ -897,38 +890,75 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
     dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
     color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
 
-    # --- 2. GENERACIÓN DE IMÁGENES PARA EL REPORTE ---
+    # --- 2. GENERACIÓN DE IMÁGENES (CON CONTROL DE ERRORES) ---
     with st.spinner("Generando gráficos para el informe..."):
         
-        # A. IMAGEN DEL MAPA
-        # Creamos un mapa estático rápido de las manzanas seleccionadas
-        fig_mapa = px.choropleth_mapbox(
-            manzanas_zona,
-            geojson=manzanas_zona.geometry,
-            locations=manzanas_zona.index,
-            color="uso_pot_simplificado" if "uso_pot_simplificado" in manzanas_zona.columns else None,
-            mapbox_style="carto-positron",
-            zoom=14,
-            center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            opacity=0.6
-        )
-        fig_mapa.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
-        # Convertir a Base64
-        img_bytes_mapa = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
-        b64_mapa = base64.b64encode(img_bytes_mapa).decode('utf-8')
+        # A. IMAGEN DEL MAPA (Esta ya te funcionaba bien)
+        try:
+            fig_mapa = px.choropleth_mapbox(
+                manzanas_zona,
+                geojson=manzanas_zona.geometry,
+                locations=manzanas_zona.index,
+                color="uso_pot_simplificado" if "uso_pot_simplificado" in manzanas_zona.columns else None,
+                mapbox_style="carto-positron",
+                zoom=14,
+                center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+                opacity=0.6
+            )
+            fig_mapa.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+            img_bytes_mapa = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
+            b64_mapa = base64.b64encode(img_bytes_mapa).decode('utf-8')
+            html_img_mapa = f'<img src="data:image/png;base64,{b64_mapa}" alt="Mapa de la zona">'
+        except Exception as e:
+            html_img_mapa = f'<div style="padding:20px; background:#eee; text-align:center;">Mapa no disponible: {str(e)}</div>'
 
-        # B. IMAGEN DE GRÁFICA (Distribución de usos)
-        if not manzanas_zona.empty and 'uso_pot_simplificado' in manzanas_zona.columns:
-            conteo = manzanas_zona['uso_pot_simplificado'].value_counts()
-            fig_bar = px.bar(x=conteo.values, y=conteo.index, orientation='h', labels={'x':'Cantidad', 'y':'Uso'})
-            fig_bar.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=250, plot_bgcolor='rgba(0,0,0,0)')
+        # B. IMAGEN DE GRÁFICA DE BARRAS (Aquí estaba el error)
+        try:
+            # 1. Asegurar datos aunque sean "Sin Clasificación"
+            df_plot = manzanas_zona.copy()
+            col_uso = 'uso_pot_simplificado'
+            
+            if col_uso not in df_plot.columns:
+                df_plot[col_uso] = "Sin Clasificación"
+            
+            df_plot[col_uso] = df_plot[col_uso].fillna("Sin Clasificación")
+            
+            # Calcular moda para el texto
+            uso_moda = df_plot[col_uso].mode()[0] if not df_plot.empty else "N/A"
+
+            # 2. Generar gráfica
+            conteo = df_plot[col_uso].value_counts()
+            
+            fig_bar = px.bar(
+                x=conteo.values, 
+                y=conteo.index, 
+                orientation='h', 
+                text=conteo.values # Pone el número al final de la barra
+            )
+            
+            # Estética limpia
+            fig_bar.update_traces(marker_color='#2980B9', textposition='outside')
+            fig_bar.update_layout(
+                margin={"r":10,"t":0,"l":0,"b":0}, 
+                height=250, 
+                plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(showgrid=False, showticklabels=False), # Ocultamos eje X para limpieza
+                yaxis=dict(showgrid=False)
+            )
             
             img_bytes_bar = fig_bar.to_image(format="png", width=600, height=250, scale=2)
             b64_bar = base64.b64encode(img_bytes_bar).decode('utf-8')
-        else:
-            b64_bar = "" # Si no hay datos, imagen vacía
+            
+            # Construimos la etiqueta HTML completa aquí
+            html_img_bar = f'<img src="data:image/png;base64,{b64_bar}" alt="Gráfica de Usos">'
+            
+        except Exception as e:
+            # Si falla, mostramos un mensaje elegante en lugar de un icono roto
+            uso_moda = "No determinado"
+            html_img_bar = f'<div style="padding:20px; border:1px dashed #ccc; color:#777; text-align:center;">Gráfica no disponible para esta zona.</div>'
 
-    # --- 3. PLANTILLA HTML CON IMÁGENES ---
+
+    # --- 3. PLANTILLA HTML ---
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -937,13 +967,13 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
         <style>
             body {{ font-family: 'Helvetica', sans-serif; color: #333; max-width: 800px; margin: 0 auto; }}
             .header {{ background: linear-gradient(90deg, #2C3E50 0%, #34495E 100%); color: white; padding: 25px; text-align: center; border-radius: 0 0 10px 10px; }}
-            .section {{ margin-top: 25px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }}
+            .section {{ margin-top: 25px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }}
             .alert {{ background: #FDEDEC; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; margin-top: 10px; }}
             .stat-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }}
-            .stat-box {{ background: #EAEDED; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }}
+            .stat-box {{ background: #EAEDED; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; color: #2C3E50; }}
             .img-container {{ text-align: center; margin: 20px 0; }}
-            img {{ max-width: 100%; border: 1px solid #ccc; border-radius: 5px; }}
-            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-size: 12px; margin-top: 5px; }}
+            img {{ max-width: 100%; border: 1px solid #eee; border-radius: 5px; }}
+            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-size: 12px; margin-top: 10px; }}
             .dictamen {{ background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; margin-top: 30px; border-radius: 8px; }}
         </style>
     </head>
@@ -954,12 +984,12 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
         </div>
         
         <div class="section">
-            <h2 style="border-bottom: 2px solid #2C3E50;">📍 1. Ubicación y Contexto</h2>
+            <h2 style="border-bottom: 2px solid #2C3E50; color: #2C3E50;">📍 1. Ubicación y Contexto</h2>
             <p><strong>Localidad:</strong> {st.session_state.localidad_sel} | <strong>Radio:</strong> {st.session_state.radio_analisis}m</p>
-            <p>Coordenadas: {st.session_state.punto_lat:.4f}, {st.session_state.punto_lon:.4f}</p>
+            <p style="color: #777; font-size: 0.9em;">Coordenadas: {st.session_state.punto_lat:.4f}, {st.session_state.punto_lon:.4f}</p>
             
             <div class="img-container">
-                <img src="data:image/png;base64,{b64_mapa}" alt="Mapa de la zona">
+                {html_img_mapa}
                 <p><em>Figura 1. Manzanas analizadas en el radio de influencia.</em></p>
             </div>
             
@@ -969,21 +999,22 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
         </div>
 
         <div class="section">
-            <h2 style="border-bottom: 2px solid #2C3E50;">📊 2. Análisis de Cobertura y Usos</h2>
+            <h2 style="border-bottom: 2px solid #2C3E50; color: #2C3E50;">📊 2. Análisis de Cobertura y Usos</h2>
             <div class="stat-grid">
-                <div class="stat-box">🚇 {len(transporte_zona)} Estaciones TM<br><small>Cobertura: {pct_cobertura_trans:.1f}%</small></div>
-                <div class="stat-box">🏫 {len(colegios_zona)} Colegios<br><small>En radio cercano</small></div>
+                <div class="stat-box">🚇 {len(transporte_zona)} Estaciones TM<br><small style="font-weight:normal;">Cobertura: {pct_cobertura_trans:.1f}%</small></div>
+                <div class="stat-box">🏫 {len(colegios_zona)} Colegios<br><small style="font-weight:normal;">En radio cercano</small></div>
             </div>
             
-            <h3>Distribución Normativa (POT)</h3>
+            <h3 style="margin-top: 20px; color: #34495E;">Distribución Normativa (POT)</h3>
             <p>El uso predominante en la zona es: <strong>{uso_moda}</strong></p>
+            
             <div class="img-container">
-                <img src="data:image/png;base64,{b64_bar}" alt="Gráfica de Usos">
+                {html_img_bar}
             </div>
         </div>
 
         <div class="section">
-            <h2 style="border-bottom: 2px solid #C0392B;">🚨 3. Seguridad</h2>
+            <h2 style="border-bottom: 2px solid #C0392B; color: #C0392B;">🚨 3. Seguridad</h2>
             <div class="alert">
                 <strong>Focos de Delito Reportados (Top 3):</strong><br>
                 {perfil_seguridad}
@@ -994,24 +1025,24 @@ if st.session_state.step == 5: # O el número de paso que corresponda en tu fluj
             DICTAMEN: {dictamen_texto}
         </div>
         
-        <div style="text-align: center; margin-top: 20px; color: #777; font-size: 12px;">
-            Generado automáticamente el 28/11/2025
+        <div style="text-align: center; margin-top: 20px; color: #999; font-size: 11px;">
+            Generado automáticamente el 28/11/2025 | TFM Visual Analytics
         </div>
     </body>
     </html>
     """
 
-    # --- 4. BOTONES (DESCARGA VERDE Y REINICIO) ---
+    # --- 4. BOTONES ---
     col_btn_html, col_reset = st.columns([2, 1])
     
     with col_btn_html:
-        # Inyectamos CSS específico para hacer este botón verde
         st.markdown("""
             <style>
             div.stDownloadButton > button {
                 background-color: #27AE60 !important;
                 color: white !important;
                 border: 1px solid #1E8449 !important;
+                font-weight: bold !important;
             }
             div.stDownloadButton > button:hover {
                 background-color: #196F3D !important;
