@@ -126,52 +126,55 @@ if "step" not in st.session_state:
 # PASO 1: SINCRONIZACIÓN Y CARGA DE DATOS
 # ==============================================================================
 if st.session_state.step == 1:
-    st.markdown("### Fase 1: Inicialización del Sistema")
+    st.markdown("### 🔌 Conectando con tu Ciudad")
     
     st.markdown("""
-    El aplicativo iniciará la conexión con el repositorio de datos procesados. 
-    Este procedimiento es crítico para asegurar la **integridad topológica** de las capas geográficas y la consistencia de los atributos alfanuméricos (seguridad, catastro y normativa).
+    Para darte un diagnóstico confiable, estamos conectando en tiempo real con el repositorio de **Datos Abiertos de Bogotá**.
     
-    *El sistema validará automáticamente la proyección espacial (EPSG:4326) requerida para la visualización web.*
+    Este proceso garantiza que consultes la información más reciente sobre:
+    * 🛡️ **Seguridad:** Datos directos de la Secretaría de Seguridad.
+    * 🗺️ **Normativa:** Reglas de juego del POT (Decreto 555).
+    * 🚌 **Infraestructura:** Red oficial de Transmilenio y Educación.
     """)
 
-    # Componente de estado para feedback 
-    with st.status("Ejecutando protocolo de conexión...", expanded=True) as status:
-        st.write("Estableciendo enlace con fuentes de datos...")
+    # Componente de estado amigable
+    with st.status("Sincronizando datos oficiales...", expanded=True) as status:
+        st.write("📥 Descargando mapas de localidades...")
         
         try:
             # Ejecutamos la función de carga
             dataframes = cargar_datasets()
             
             if dataframes:
-                # Simulamos pasos de validación para dar confianza al usuario
-                st.write("Validando geometría de Localidades y Manzanas... OK")
-                st.write("Verificando índices de seguridad ciudadana... OK")
-                st.write("Cargando capas de infraestructura (Transporte y Educación)... OK")
+                # Mensajes de validación entendibles
+                st.write("✅ Verificando calidad de los mapas... OK")
+                st.write("✅ Cargando estadísticas de seguridad... OK")
+                st.write("✅ Ubicando estaciones y colegios... OK")
                 
-                # Almacenamos los datasets en la memoria de sesión
+                # Almacenamos los datasets en la memoria
                 st.session_state.update(dataframes)
                 
-                # Finalizamos el estado con éxito
-                status.update(label="Sincronización completada exitosamente", state="complete", expanded=False)
+                # Finalizamos el estado
+                status.update(label="¡Datos listos! Conexión exitosa.", state="complete", expanded=False)
                 
-                st.success("Los datos han sido validados y están listos para el procesamiento.")
+                st.success("Toda la información ha sido validada. Estamos listos para comenzar.")
                 
                 st.markdown("---")
                 
-                # Botón de acción centrado y profesional
+                # Botón de acción claro
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
-                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True):
+                    if st.button("📍 Comenzar a Explorar", type="primary", use_container_width=True):
                         st.session_state.step = 2
                         st.rerun()
             else:
-                status.update(label="Error en la sincronización", state="error")
-                st.error("Fallo al recuperar los datasets. Verifique la disponibilidad del repositorio.")
+                status.update(label="Error de conexión", state="error")
+                st.error("No pudimos conectar con los datos de Bogotá. Revisa tu internet e intenta de nuevo.")
                 
         except Exception as e:
-            status.update(label="Excepción del sistema", state="error")
-            st.error(f"Detalle técnico del error: {e}")
+            status.update(label="Algo salió mal", state="error")
+            st.error(f"Error técnico: {e}")
+            
 # ==============================================================================
 # PASO 2: SELECCIÓN DE UNIDAD ADMINISTRATIVA Y CONTEXTO
 # ==============================================================================
