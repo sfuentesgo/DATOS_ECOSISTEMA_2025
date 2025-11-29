@@ -856,230 +856,95 @@ elif st.session_state.step == 5:
         {texto_seg}
     </div>
     """, unsafe_allow_html=True)
-# 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
-    st.success("✅ Informe Generado Correctamente")
+# -------------------------------------------------------------------------
+    # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.header("📑 Informe Ejecutivo")
+
+    # Cálculos previos
+    poly_localidad = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].geometry.iloc[0]
+    total_estaciones_loc = len(transporte[transporte.geometry.within(poly_localidad)])
+    pct_cobertura_trans = (len(transporte_zona) / total_estaciones_loc * 100) if total_estaciones_loc > 0 else 0
     
-    col_descarga, col_reinicio = st.columns([1, 1])
+    # Datos cualitativos
+    datos_loc = localidades[localidades['nombre_localidad'] == st.session_state.localidad_sel].iloc[0]
+    perfil_seguridad = datos_loc.get('top_3_delitos', 'No disponible')
     
-    with col_descarga:
-        # Inyección CSS para botón VERDE GRANDE
-        st.markdown("""
-            <style>
-            div.stDownloadButton > button {
-                background-color: #27AE60 !important;
-                color: white !important;
-                border: 1px solid #1E8449 !important;
-                border-radius: 8px !important;
-                padding: 15px 25px !important;
-                font-size: 18px !important;
-                font-weight: bold !important;
-                width: 100%;
-            }
-            div.stDownloadButton > button:hover {
-                background-color: #1E8449 !important;
-                color: #FDFEFE !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
+    # Enlace a Google Maps
+    link_gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
+
+    # Scoring
+    score = 0
+    if len(transporte_zona) >= 3: score += 1
+    if len(colegios_zona) >= 2: score += 1
+    if not manzanas_zona.empty: score += 1
+    
+    dictamen_texto = "ALTAMENTE VIABLE" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
+    color_dictamen = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
+
+    # HTML Template
+    html_report = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: sans-serif; color: #333; }}
+            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
+            .box {{ background: #F4F6F6; padding: 15px; margin: 10px 0; border: 1px solid #BDC3C7; }}
+            .alert {{ background: #FADBD8; color: #922B21; padding: 10px; border-left: 5px solid #C0392B; }}
+            .btn-map {{ display: inline-block; background: #3498DB; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Reporte de Inteligencia Territorial</h1>
+            <p>Bogotá Inteligente - Datos al Ecosistema 2025</p>
+        </div>
         
+        <div class="box">
+            <h3>📍 Ubicación del Análisis</h3>
+            <p><strong>Localidad:</strong> {st.session_state.localidad_sel}</p>
+            <p><strong>Coordenadas:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
+            <a href="{link_gmaps}" target="_blank" class="btn-map">🗺️ Ver Ubicación en Google Maps</a>
+        </div>
+
+        <div class="box">
+            <h3>🚨 Seguridad y Convivencia</h3>
+            <div class="alert"><strong>Focos de Delito (Top 3):</strong><br>{perfil_seguridad}</div>
+        </div>
+
+        <div class="box">
+            <h3>📊 Indicadores de Cobertura ({st.session_state.radio_analisis}m)</h3>
+            <ul>
+                <li><strong>Transporte:</strong> {len(transporte_zona)} estaciones ({pct_cobertura_trans:.1f}% de la localidad).</li>
+                <li><strong>Educación:</strong> {len(colegios_zona)} colegios.</li>
+                <li><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}.</li>
+            </ul>
+        </div>
+        
+        <div style="background: {color_dictamen}; color: white; padding: 20px; text-align: center; font-size: 20px; margin-top: 20px;">
+            DICTAMEN: {dictamen_texto}
+        </div>
+    </body>
+    </html>
+    """
+
+    col_btn_html, col_reset = st.columns([2, 1])
+    
+    with col_btn_html:
         st.download_button(
-            label="📥 DESCARGAR INFORME (PDF/HTML)",
-            data=st.session_state.informe_html,
-            file_name=f"Informe_Inversion_{manzana_id}.html",
-            mime="text/html"
+            label="📥 Descargar Informe Ejecutivo (HTML)",
+            data=html_report,
+            file_name=f"Reporte_{st.session_state.localidad_sel}.html",
+            mime="text/html",
+            type="primary"
         )
-        
-    with col_reinicio:
-        # Espaciador visual para alinear botones
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Iniciar Nuevo Análisis", use_container_width=True):
-            # Limpieza profunda de variables
-            keys_to_clear = ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'manzana_sel', 'step']
-            for key in keys_to_clear:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.step = 1 
+    
+    with col_reset:
+        if st.button("🔄 Iniciar Nuevo Análisis"):
+            for key in ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic']:
+                if key in st.session_state: del st.session_state[key]
+            st.session_state.step = 2
             st.rerun()
-    
-# --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y PROFESIONAL) ---
-elif st.session_state.step == 7:
-    import base64  # Importante: Importación local para este bloque
-    
-    st.header("📑 Generación del Informe Ejecutivo")
-    
-    # 1. RECUPERACIÓN SEGURA DE DATOS (Evita el NameError)
-    try:
-        manzana_id = st.session_state.manzana_sel
-        # Recuperamos el GeoDataFrame completo de la memoria
-        gdf_completo = st.session_state.manzanas_localidad_sel 
-        # Filtramos la manzana específica
-        manzana_sel = gdf_completo[gdf_completo["id_manzana_unif"] == manzana_id].copy()
-        
-        if manzana_sel.empty:
-            st.error("Error crítico: No se encuentran los datos de la manzana en memoria.")
-            st.stop()
-            
-    except AttributeError:
-        st.error("⚠️ Faltan datos en memoria. Por favor vuelve al paso anterior o reinicia.")
-        st.stop()
-
-    # 2. GENERACIÓN DEL HTML
-    with st.spinner('🎨 Maquetando informe de alta gerencia...'):
-        
-        # --- A. PREPARAR VARIABLES ---
-        # Usamos .get() para evitar errores si falta alguna columna
-        barrio = manzana_sel.get('nombre_barrio', 'Sin Dato').values[0] if 'nombre_barrio' in manzana_sel.columns else st.session_state.get('nombre_localidad', 'Bogotá')
-        estrato = manzana_sel['estrato'].values[0]
-        uso_suelo = manzana_sel['uso_pot_simplificado'].values[0]
-        valor_m2 = manzana_sel['valor_m2'].values[0]
-        
-        # Rentabilidad y Proyección (con valores por defecto si no existen)
-        rentabilidad = manzana_sel['rentabilidad'].values[0] if 'rentabilidad' in manzana_sel.columns else 0
-        
-        if 'valor_2026_s2' in manzana_sel.columns:
-            valor_futuro = manzana_sel['valor_2026_s2'].values[0]
-            crecimiento = ((valor_futuro - valor_m2) / valor_m2) * 100
-        else:
-            crecimiento = 0
-
-        # --- B. LÓGICA DE SCORING (DICTAMEN) ---
-        score = 0
-        razones = []
-        
-        # Criterio 1: Financiero
-        if rentabilidad > 0.005: 
-            score += 1
-            razones.append("Rentabilidad superior al promedio")
-        if crecimiento > 8: 
-            score += 2
-            razones.append(f"Alta proyección de valorización (+{crecimiento:.1f}%)")
-        
-        # Criterio 2: Cobertura (Recuperamos de columnas pre-calculadas o session)
-        colegios = int(manzana_sel['colegio_cerca'].values[0]) if 'colegio_cerca' in manzana_sel.columns else 0
-        estaciones = int(manzana_sel['estaciones_cerca'].values[0]) if 'estaciones_cerca' in manzana_sel.columns else 0
-        
-        if colegios > 0 and estaciones > 0:
-            score += 1
-            razones.append("Excelente conectividad y servicios")
-
-        # Resultado del Dictamen
-        if score >= 3:
-            dictamen_titulo = "OPORTUNIDAD DE INVERSIÓN ALTA"
-            dictamen_color = "#27AE60" # Verde
-            dictamen_desc = "Activo con alto potencial de retorno y bajo riesgo normativo."
-        elif score >= 1:
-            dictamen_titulo = "VIABILIDAD MEDIA"
-            dictamen_color = "#F39C12" # Naranja
-            dictamen_desc = "Activo estable. Se recomienda negociación estratégica."
-        else:
-            dictamen_titulo = "VIABILIDAD RESTRINGIDA"
-            dictamen_color = "#C0392B" # Rojo
-            dictamen_desc = "Proyección limitada a corto plazo."
-
-        # --- C. INCRUSTAR IMÁGENES (BASE64) ---
-        def get_img(key):
-            # Función auxiliar para convertir buffer a string Base64
-            if key in st.session_state and st.session_state[key] is not None:
-                try:
-                    st.session_state[key].seek(0)
-                    return base64.b64encode(st.session_state[key].read()).decode('utf-8')
-                except:
-                    return ""
-            return ""
-
-        img_transporte = get_img('buffer_transporte')
-        img_pot_pie = get_img('buffer_dist_pot') 
-        img_proyeccion = get_img('buffer_proyeccion')
-        img_seguridad = get_img('buffer_seguridad')
-
-        # --- D. PLANTILLA HTML (2 COLUMNAS) ---
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Segoe UI', sans-serif; color: #333; max-width: 900px; margin: 0 auto; background: white; }}
-                .header {{ background: linear-gradient(135deg, #1F618D 0%, #2980B9 100%); color: white; padding: 25px; border-radius: 0 0 10px 10px; display: flex; justify-content: space-between; }}
-                .row {{ display: flex; gap: 20px; margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 20px; }}
-                .col-text {{ flex: 1; text-align: justify; padding-right: 10px; }}
-                .col-img {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
-                h2 {{ color: #154360; border-left: 4px solid #E74C3C; padding-left: 10px; margin-top: 0; }}
-                .stat {{ background: #EAEDED; padding: 10px; border-radius: 5px; margin: 5px 0; font-weight: bold; color: #2E4053; }}
-                img {{ max-width: 100%; border: 1px solid #ccc; border-radius: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }}
-                .caption {{ font-size: 0.8em; color: #777; margin-top: 5px; text-align: center; }}
-                .dictamen {{ background: {dictamen_color}; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-top: 30px; }}
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <div>
-                    <h1 style="margin:0;">Reporte de Inteligencia Inmobiliaria</h1>
-                    <p style="margin:5px 0 0;">Manzana ID: {manzana_id} | {st.session_state.get('nombre_localidad', 'Bogotá')}</p>
-                </div>
-                <div style="text-align: right;">
-                    <p>Fecha: 28/11/2025</p>
-                    <p>CONFIDENCIAL</p>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-text">
-                    <h2>1. Ubicación y Entorno</h2>
-                    <p>El inmueble se ubica en el barrio <strong>{barrio}</strong>, estrato <strong>{estrato}</strong>.</p>
-                    <div class="stat">🚇 Estaciones TM cercanas: {estaciones}</div>
-                    <div class="stat">🏫 Colegios cercanos: {colegios}</div>
-                    <p>La conectividad de la zona garantiza accesibilidad y flujo peatonal, factores clave para la valorización comercial y residencial.</p>
-                </div>
-                <div class="col-img">
-                    <img src="data:image/png;base64,{img_transporte}">
-                    <div class="caption">Contexto de Movilidad (Radio 800m)</div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-img">
-                    <img src="data:image/png;base64,{img_pot_pie}">
-                    <div class="caption">Distribución de Usos del Suelo</div>
-                </div>
-                <div class="col-text">
-                    <h2>2. Análisis Normativo</h2>
-                    <p>Uso principal asignado: <strong>{uso_suelo}</strong>.</p>
-                    <p>El gráfico adjunto muestra la predominancia de actividades en el sector, definiendo la vocación del entorno.</p>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-text">
-                    <h2>3. Proyección Financiera</h2>
-                    <div class="stat">💰 Valor m² Actual: ${valor_m2:,.0f}</div>
-                    <div class="stat">📈 Crecimiento (24 meses): {crecimiento:.1f}%</div>
-                    <p>El modelo predictivo sugiere una tendencia favorable basada en el comportamiento histórico del sector.</p>
-                </div>
-                <div class="col-img">
-                    <img src="data:image/png;base64,{img_proyeccion}">
-                    <div class="caption">Curva de Valorización</div>
-                </div>
-            </div>
-            
-             <div class="row">
-                 <div class="col-img">
-                    <img src="data:image/png;base64,{img_seguridad}">
-                </div>
-                <div class="col-text">
-                    <h2>4. Contexto de Seguridad</h2>
-                    <p>Análisis comparativo de incidencia delictiva. Este indicador es fundamental para estrategias de operación y aseguramiento.</p>
-                </div>
-            </div>
-
-            <div class="dictamen">
-                <h2 style="color:white; border:none; margin:0;">{dictamen_titulo}</h2>
-                <p>{dictamen_desc}</p>
-                <small>Factores clave: {', '.join(razones)}</small>
-            </div>
-        </body>
-        </html>
-        """
-        # Guardamos el HTML generado en la sesión
-        st.session_state.informe_html = html_content
 
