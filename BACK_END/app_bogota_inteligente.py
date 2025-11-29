@@ -649,61 +649,91 @@ elif st.session_state.step == 5:
         st.warning("Sin datos residenciales.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (LÓGICA CORREGIDA: MANZANAS + CENTROIDES)
+    # SECCIÓN 4: POT (LÓGICA BLINDADA CON REPARACIÓN DE GEOMETRÍA)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
     st.markdown("Vocación normativa proyectada sobre cada manzana.")
 
-    # 1. Preparar datos para el cruce (Manzanas de la zona)
+    # 1. Preparación de Datos
     manzanas_pot = manzanas_zona.copy()
     
-    # 2. Calcular Centroides (Temporalmente en metros para precisión)
-    # El centroide representa mejor a la manzana que el polígono entero para asignar un uso único
+    # 2. TRUCO GIS: Reparar geometrías inválidas (buffer(0))
+    # Esto arregla polígonos que se cruzan a sí mismos y fallan en el sjoin
+    areas_pot['geometry'] = areas_pot.geometry.buffer(0)
+    
+    # 3. Calcular Centroides para el cruce
     manzanas_pot['centroid'] = manzanas_pot.to_crs(epsg=3116).centroid.to_crs(epsg=4326)
     
-    # 3. Spatial Join: Manzanas (Puntos) vs Áreas POT (Polígonos)
-    # Usamos set_geometry para hacer el join usando el PUNTO central, no el polígono
+    # 4. CRUCE ESPACIAL (Spatial Join)
+    # Usamos set_geometry con el centroide
     try:
         manzanas_pot = manzanas_pot.set_geometry('centroid')
-        manzanas_pot = gpd.sjoin(manzanas_pot, areas_pot[['nombre_area', 'geometry']], how='left', predicate='within')
         
-        # Volvemos a poner la geometría original (el polígono) para poder pintarlo
-        # (Importante: sjoin a veces borra la geometría original si no se cuida)
+        # Hacemos el join. Si 'within' falla, intentamos 'intersects' que es más permisivo
+        manzanas_pot = gpd.sjoin(
+            manzanas_pot, 
+            areas_pot[['uso_pot_simplificado', 'geometry']], 
+            how='left', 
+            predicate='intersects' # Cambiado a intersects para mayor tolerancia
+        )
+        
+        # Volvemos a la geometría original (Polígono)
         manzanas_pot = manzanas_pot.set_geometry('geometry')
         
         # Rellenar vacíos
-        manzanas_pot['nombre_area'] = manzanas_pot['nombre_area'].fillna('Sin Clasificación')
+        manzanas_pot['uso_pot_simplificado'] = manzanas_pot['uso_pot_simplificado'].fillna('Sin Clasificación')
+        
+        # Verificar si hay datos
+        datos_encontrados = manzanas_pot['uso_pot_simplificado'].nunique() > 1
+        
     except Exception as e:
         st.error(f"Error técnico en cruce POT: {e}")
         manzanas_pot = gpd.GeoDataFrame()
+        datos_encontrados = False
 
-    if not manzanas_pot.empty:
+    if not manzanas_pot.empty and datos_encontrados:
         col_mapa_pot, col_data_pot = st.columns([2, 1])
         
         with col_mapa_pot:
-            # AHORA SÍ: Pintamos las MANZANAS coloreadas por su uso POT
+            # MAPA COLOREADO
             fig_p = px.choropleth_mapbox(
                 manzanas_pot, 
                 geojson=manzanas_pot.geometry, 
                 locations=manzanas_pot.index,
-                color="nombre_area", 
+                color="uso_pot_simplificado", 
                 mapbox_style="carto-positron", 
                 zoom=14.5,
                 center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
                 opacity=0.6, 
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                title="Vocación por Manzana"
+                title="Vocación por Manzana",
+                # Colores distintos para que se note la diferencia
+                color_discrete_sequence=px.colors.qualitative.Prism
             )
             fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False)
-            fig_p.add_trace(go.Scattermapbox(lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]), mode='lines', line=dict(color='black', width=2), name='Límite'))
+            
+            # Límite
+            fig_p.add_trace(go.Scattermapbox(
+                lat=list(area_interes.exterior.xy[1]), 
+                lon=list(area_interes.exterior.xy[0]), 
+                mode='lines', 
+                line=dict(color='black', width=2), 
+                name='Límite'
+            ))
             st.plotly_chart(fig_p, use_container_width=True)
 
         with col_data_pot:
-            uso_moda = manzanas_pot['nombre_area'].mode()[0]
+            # Calcular Moda (quitando 'Sin Clasificación' si es posible)
+            serie_usos = manzanas_pot[manzanas_pot['uso_pot_simplificado'] != 'Sin Clasificación']['uso_pot_simplificado']
+            
+            if not serie_usos.empty:
+                uso_moda = serie_usos.mode()[0]
+            else:
+                uso_moda = "Zona sin reglamentación específica"
+                
             st.info(f"Vocación Principal: **{uso_moda}**")
             
-            conteo_uso = manzanas_pot['nombre_area'].value_counts()
+            conteo_uso = manzanas_pot['uso_pot_simplificado'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
                 y=[l[:15] for l in conteo_uso.index], x=conteo_uso.values, orientation='h',
                 marker_color='#1ABC9C'
@@ -711,7 +741,7 @@ elif st.session_state.step == 5:
             fig_bp.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_bp, use_container_width=True)
     else:
-        st.warning("⚠️ No se pudo cruzar la información del POT con las manzanas de este sector.")
+        st.warning("⚠️ El cruce de datos no arrojó resultados. Es posible que las manzanas seleccionadas no tengan clasificación POT asignada en la base de datos.")
 
     # -------------------------------------------------------------------------
     # CIERRE: SEGURIDAD Y HTML
