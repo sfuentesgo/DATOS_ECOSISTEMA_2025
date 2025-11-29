@@ -52,19 +52,23 @@ st.markdown("""
 st.write("") # Espacio vacío
 
 # Explicación de valor con iconos sencillos
-col_info1, col_info2, col_info3 = st.columns(3)
+col_info1, col_info2, col_info3, col_info4 = st.columns(4)
 
 with col_info1:
-    st.markdown("### 👮 Seguridad Real")
-    st.info("Conoce el **Top 3 de delitos** específicos de la zona. No es lo mismo un barrio donde roban celulares a uno con hurto de residencias.")
+    st.markdown("### 👮 Seguridad")
+    st.info("Conoce el **Top 3 de delitos** reales. No es lo mismo un barrio donde roban celulares a uno con hurto de casas.")
 
 with col_info2:
-    st.markdown("### 🏡 Tu Entorno")
-    st.warning("Descubre si el uso del suelo es **Residencial, Comercial o Industrial** según el POT vigente. Evita sorpresas ruidosas.")
+    st.markdown("### 🏡 Normativa")
+    st.warning("Consulta el POT vigente. Descubre si tu vecino será un edificio residencial o una zona industrial ruidosa.")
 
 with col_info3:
-    st.markdown("### 🚌 Calidad de Vida")
-    st.success("Analiza qué tan fácil es moverte. Mide la cercanía a **Transporte Público (Transmilenio/SITP)** y colegios.")
+    st.markdown("### 🚌 Movilidad")
+    st.success("Mide la conectividad real. Ubica las estaciones de **Transmilenio y SITP** a pasos de tu ubicación.")
+
+with col_info4:
+    st.markdown("### 🏫 Educación")
+    st.error("Para las familias: encuentra la oferta de **Colegios Oficiales y Privados** en el sector.")
 
 st.markdown("---")
 
