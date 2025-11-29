@@ -858,47 +858,52 @@ elif st.session_state.step == 5:
     """, unsafe_allow_html=True)
 
     
-# --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y COMPLETO) ---
+# --- Bloque 7: Generación del Informe Ejecutivo (FINAL Y PROFESIONAL) ---
 elif st.session_state.step == 7:
-    import base64  # Importación dentro del bloque
+    import base64  # Importante: Importación local para este bloque
     
     st.header("📑 Generación del Informe Ejecutivo")
     
-    # 1. RECUPERACIÓN SEGURA DE DATOS
+    # 1. RECUPERACIÓN SEGURA DE DATOS (Evita el NameError)
     try:
         manzana_id = st.session_state.manzana_sel
+        # Recuperamos el GeoDataFrame completo de la memoria
         gdf_completo = st.session_state.manzanas_localidad_sel 
+        # Filtramos la manzana específica
         manzana_sel = gdf_completo[gdf_completo["id_manzana_unif"] == manzana_id].copy()
         
         if manzana_sel.empty:
-            st.error("Error crítico: No se encuentra la manzana en memoria.")
+            st.error("Error crítico: No se encuentran los datos de la manzana en memoria.")
             st.stop()
             
     except AttributeError:
-        st.error("⚠️ Faltan datos en memoria. Por favor reinicia el análisis.")
+        st.error("⚠️ Faltan datos en memoria. Por favor vuelve al paso anterior o reinicia.")
         st.stop()
 
-    # 2. GENERACIÓN DEL HTML (Solo si no existe ya)
+    # 2. GENERACIÓN DEL HTML
     with st.spinner('🎨 Maquetando informe de alta gerencia...'):
         
-        # --- A. PREPARAR DATOS ---
-        barrio = manzana_sel.get('nombre_barrio', 'Sin Dato').values[0] if 'nombre_barrio' in manzana_sel.columns else st.session_state.nombre_localidad
+        # --- A. PREPARAR VARIABLES ---
+        # Usamos .get() para evitar errores si falta alguna columna
+        barrio = manzana_sel.get('nombre_barrio', 'Sin Dato').values[0] if 'nombre_barrio' in manzana_sel.columns else st.session_state.get('nombre_localidad', 'Bogotá')
         estrato = manzana_sel['estrato'].values[0]
-        area_pot = manzana_sel['codigo_area_pot'].values[0] if 'codigo_area_pot' in manzana_sel.columns else "Área General"
         uso_suelo = manzana_sel['uso_pot_simplificado'].values[0]
         valor_m2 = manzana_sel['valor_m2'].values[0]
+        
+        # Rentabilidad y Proyección (con valores por defecto si no existen)
         rentabilidad = manzana_sel['rentabilidad'].values[0] if 'rentabilidad' in manzana_sel.columns else 0
         
-        # Proyección
         if 'valor_2026_s2' in manzana_sel.columns:
             valor_futuro = manzana_sel['valor_2026_s2'].values[0]
             crecimiento = ((valor_futuro - valor_m2) / valor_m2) * 100
         else:
             crecimiento = 0
 
-        # --- B. SCORING ---
+        # --- B. LÓGICA DE SCORING (DICTAMEN) ---
         score = 0
         razones = []
+        
+        # Criterio 1: Financiero
         if rentabilidad > 0.005: 
             score += 1
             razones.append("Rentabilidad superior al promedio")
@@ -906,6 +911,7 @@ elif st.session_state.step == 7:
             score += 2
             razones.append(f"Alta proyección de valorización (+{crecimiento:.1f}%)")
         
+        # Criterio 2: Cobertura (Recuperamos de columnas pre-calculadas o session)
         colegios = int(manzana_sel['colegio_cerca'].values[0]) if 'colegio_cerca' in manzana_sel.columns else 0
         estaciones = int(manzana_sel['estaciones_cerca'].values[0]) if 'estaciones_cerca' in manzana_sel.columns else 0
         
@@ -913,24 +919,29 @@ elif st.session_state.step == 7:
             score += 1
             razones.append("Excelente conectividad y servicios")
 
+        # Resultado del Dictamen
         if score >= 3:
             dictamen_titulo = "OPORTUNIDAD DE INVERSIÓN ALTA"
-            dictamen_color = "#27AE60" 
-            dictamen_desc = "Activo con alto potencial de retorno y bajo riesgo."
+            dictamen_color = "#27AE60" # Verde
+            dictamen_desc = "Activo con alto potencial de retorno y bajo riesgo normativo."
         elif score >= 1:
             dictamen_titulo = "VIABILIDAD MEDIA"
-            dictamen_color = "#F39C12" 
-            dictamen_desc = "Activo estable. Se recomienda negociación."
+            dictamen_color = "#F39C12" # Naranja
+            dictamen_desc = "Activo estable. Se recomienda negociación estratégica."
         else:
             dictamen_titulo = "VIABILIDAD RESTRINGIDA"
-            dictamen_color = "#C0392B" 
+            dictamen_color = "#C0392B" # Rojo
             dictamen_desc = "Proyección limitada a corto plazo."
 
-        # --- C. IMÁGENES ---
+        # --- C. INCRUSTAR IMÁGENES (BASE64) ---
         def get_img(key):
+            # Función auxiliar para convertir buffer a string Base64
             if key in st.session_state and st.session_state[key] is not None:
-                st.session_state[key].seek(0)
-                return base64.b64encode(st.session_state[key].read()).decode('utf-8')
+                try:
+                    st.session_state[key].seek(0)
+                    return base64.b64encode(st.session_state[key].read()).decode('utf-8')
+                except:
+                    return ""
             return ""
 
         img_transporte = get_img('buffer_transporte')
@@ -938,7 +949,7 @@ elif st.session_state.step == 7:
         img_proyeccion = get_img('buffer_proyeccion')
         img_seguridad = get_img('buffer_seguridad')
 
-        # --- D. HTML ---
+        # --- D. PLANTILLA HTML (2 COLUMNAS) ---
         html_content = f"""
         <!DOCTYPE html>
         <html lang="es">
@@ -948,7 +959,7 @@ elif st.session_state.step == 7:
                 body {{ font-family: 'Segoe UI', sans-serif; color: #333; max-width: 900px; margin: 0 auto; background: white; }}
                 .header {{ background: linear-gradient(135deg, #1F618D 0%, #2980B9 100%); color: white; padding: 25px; border-radius: 0 0 10px 10px; display: flex; justify-content: space-between; }}
                 .row {{ display: flex; gap: 20px; margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 20px; }}
-                .col-text {{ flex: 1; text-align: justify; }}
+                .col-text {{ flex: 1; text-align: justify; padding-right: 10px; }}
                 .col-img {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
                 h2 {{ color: #154360; border-left: 4px solid #E74C3C; padding-left: 10px; margin-top: 0; }}
                 .stat {{ background: #EAEDED; padding: 10px; border-radius: 5px; margin: 5px 0; font-weight: bold; color: #2E4053; }}
@@ -961,7 +972,7 @@ elif st.session_state.step == 7:
             <div class="header">
                 <div>
                     <h1 style="margin:0;">Reporte de Inteligencia Inmobiliaria</h1>
-                    <p style="margin:5px 0 0;">Manzana ID: {manzana_id} | {st.session_state.nombre_localidad}</p>
+                    <p style="margin:5px 0 0;">Manzana ID: {manzana_id} | {st.session_state.get('nombre_localidad', 'Bogotá')}</p>
                 </div>
                 <div style="text-align: right;">
                     <p>Fecha: 28/11/2025</p>
@@ -975,21 +986,23 @@ elif st.session_state.step == 7:
                     <p>El inmueble se ubica en el barrio <strong>{barrio}</strong>, estrato <strong>{estrato}</strong>.</p>
                     <div class="stat">🚇 Estaciones TM cercanas: {estaciones}</div>
                     <div class="stat">🏫 Colegios cercanos: {colegios}</div>
+                    <p>La conectividad de la zona garantiza accesibilidad y flujo peatonal, factores clave para la valorización comercial y residencial.</p>
                 </div>
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_transporte}">
-                    <div class="caption">Contexto de Movilidad</div>
+                    <div class="caption">Contexto de Movilidad (Radio 800m)</div>
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_pot_pie}">
-                    <div class="caption">Usos del Suelo</div>
+                    <div class="caption">Distribución de Usos del Suelo</div>
                 </div>
                 <div class="col-text">
                     <h2>2. Análisis Normativo</h2>
                     <p>Uso principal asignado: <strong>{uso_suelo}</strong>.</p>
+                    <p>El gráfico adjunto muestra la predominancia de actividades en el sector, definiendo la vocación del entorno.</p>
                 </div>
             </div>
 
@@ -998,6 +1011,7 @@ elif st.session_state.step == 7:
                     <h2>3. Proyección Financiera</h2>
                     <div class="stat">💰 Valor m² Actual: ${valor_m2:,.0f}</div>
                     <div class="stat">📈 Crecimiento (24 meses): {crecimiento:.1f}%</div>
+                    <p>El modelo predictivo sugiere una tendencia favorable basada en el comportamiento histórico del sector.</p>
                 </div>
                 <div class="col-img">
                     <img src="data:image/png;base64,{img_proyeccion}">
@@ -1011,39 +1025,62 @@ elif st.session_state.step == 7:
                 </div>
                 <div class="col-text">
                     <h2>4. Contexto de Seguridad</h2>
-                    <p>Incidencia delictiva comparada por localidad.</p>
+                    <p>Análisis comparativo de incidencia delictiva. Este indicador es fundamental para estrategias de operación y aseguramiento.</p>
                 </div>
             </div>
 
             <div class="dictamen">
                 <h2 style="color:white; border:none; margin:0;">{dictamen_titulo}</h2>
                 <p>{dictamen_desc}</p>
-                <small>Factores: {', '.join(razones)}</small>
+                <small>Factores clave: {', '.join(razones)}</small>
             </div>
         </body>
         </html>
         """
+        # Guardamos el HTML generado en la sesión
         st.session_state.informe_html = html_content
 
-    # 3. AQUÍ ESTABAN LOS BOTONES PERDIDOS
+    # 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
     st.success("✅ Informe Generado Correctamente")
     
-    col1, col2 = st.columns([1,1])
+    col_descarga, col_reinicio = st.columns([1, 1])
     
-    with col1:
-        # Estilo para botón verde
-        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; border: none; padding: 12px 25px;}</style>""", unsafe_allow_html=True)
+    with col_descarga:
+        # Inyección CSS para botón VERDE GRANDE
+        st.markdown("""
+            <style>
+            div.stDownloadButton > button {
+                background-color: #27AE60 !important;
+                color: white !important;
+                border: 1px solid #1E8449 !important;
+                border-radius: 8px !important;
+                padding: 15px 25px !important;
+                font-size: 18px !important;
+                font-weight: bold !important;
+                width: 100%;
+            }
+            div.stDownloadButton > button:hover {
+                background-color: #1E8449 !important;
+                color: #FDFEFE !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
         
         st.download_button(
-            label="📥 Descargar Informe (PDF/HTML)",
+            label="📥 DESCARGAR INFORME (PDF/HTML)",
             data=st.session_state.informe_html,
-            file_name=f"Informe_{manzana_id}.html",
+            file_name=f"Informe_Inversion_{manzana_id}.html",
             mime="text/html"
         )
         
-    with col2:
-        if st.button("🔄 Nuevo Análisis"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.session_state.step = 1
+    with col_reinicio:
+        # Espaciador visual para alinear botones
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Iniciar Nuevo Análisis", use_container_width=True):
+            # Limpieza profunda de variables
+            keys_to_clear = ['punto_lat', 'punto_lon', 'localidad_sel', 'localidad_clic', 'manzana_sel', 'step']
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.step = 1 
             st.rerun()
