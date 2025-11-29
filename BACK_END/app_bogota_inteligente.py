@@ -1040,7 +1040,7 @@ elif st.session_state.step == 7:
         # Guardamos el HTML generado en la sesión
         st.session_state.informe_html = html_content
 
-    # 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
+# 3. ZONA DE DESCARGA Y REINICIO (Fuera del spinner para asegurar visibilidad)
     st.success("✅ Informe Generado Correctamente")
     
     col_descarga, col_reinicio = st.columns([1, 1])
