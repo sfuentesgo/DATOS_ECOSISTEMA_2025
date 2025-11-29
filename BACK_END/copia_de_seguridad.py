@@ -496,45 +496,38 @@ elif st.session_state.step == 5:
     """)
 
     # -------------------------------------------------------------------------
-    # 1. MOTOR DE CÁLCULO
+    # 1. MOTOR DE CÁLCULO (Con Red de Seguridad para POT)
     # -------------------------------------------------------------------------
     localidades = st.session_state.localidades
-    manzanas    = st.session_state.manzanas
-    transporte  = st.session_state.transporte
-    colegios    = st.session_state.colegios
-    areas_pot   = st.session_state.areas
+    manzanas = st.session_state.manzanas
+    transporte = st.session_state.transporte
+    colegios = st.session_state.colegios
+    areas_pot = st.session_state.areas
 
-    # Buffer
+    # Geometría del Buffer
     punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
     gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
     gdf_buffer = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis).to_crs(epsg=4326)
     area_interes = gdf_buffer.iloc[0]
 
-    # Proyecciones
+    # Asegurar Proyecciones
     if transporte.crs != "EPSG:4326": transporte = transporte.to_crs("EPSG:4326")
     if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
 
-    # Cruces Básicos
+    # Cruces Espaciales Básicos
     transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
-    colegios_zona   = colegios[colegios.geometry.intersects(area_interes)]
-    manzanas_zona   = manzanas[manzanas.geometry.intersects(area_interes)]
-
-    # --- LÓGICA AVM PARA POT (CRUCE ESPACIAL ENTRE MANZANAS Y POT) ---
-    # En lugar de usar la capa de áreas cruda, le pegamos el dato a las manzanas
-    manzanas_pot = gpd.GeoDataFrame()
-    uso_moda_pot = "Sin Clasificar"
+    colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
+    manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
     
-    if not manzanas_zona.empty and not areas_pot.empty:
-        try:
-            # Join Espacial: Manzanas que tocan Areas POT
-            # 'inner' para quedarnos solo con lo que tiene dato
-            manzanas_pot = gpd.sjoin(manzanas_zona, areas_pot[['uso_pot_simplificado', 'geometry']], how='inner', predicate='intersects')
-            if not manzanas_pot.empty:
-                uso_moda_pot = manzanas_pot['uso_pot_simplificado'].mode()[0]
-        except Exception as e:
-            st.error(f"Error calculando POT: {e}")
+    # LÓGICA ROBUSTA PARA POT (Corrección del error reportado)
+    # 1. Intentamos cruzar con el buffer
+    areas_zona = areas_pot[areas_pot.geometry.intersects(area_interes)]
+    
+    # 2. Si falla (está vacío), buscamos el polígono donde cae el punto exacto
+    if areas_zona.empty:
+        areas_zona = areas_pot[areas_pot.geometry.contains(punto_ref)]
 
     # -------------------------------------------------------------------------
     # SECCIÓN 1: MOVILIDAD
@@ -547,36 +540,47 @@ elif st.session_state.step == 5:
 
     with col_mapa_mov:
         fig_t = go.Figure()
+        # Zona
         fig_t.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', name='Zona', fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
         ))
+        # Estaciones
         if not transporte_zona.empty:
             fig_t.add_trace(go.Scattermapbox(
                 lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
-                mode='markers', name='Estaciones',
-                marker=dict(size=10, color='#E74C3C', symbol='circle'), # Círculo para asegurar render
+                mode='markers', name='Paraderos',
+                marker=dict(size=10, color='#E74C3C', symbol='circle'),
                 text=transporte_zona['nombre_estacion'], hoverinfo='text'
             ))
+        # Tu punto
         fig_t.add_trace(go.Scattermapbox(
             lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
         ))
         fig_t.update_layout(
-            mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-            mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True, legend=dict(orientation="h", y=1.1)
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True,
+            legend=dict(orientation="h", y=1.1)
         )
         st.plotly_chart(fig_t, use_container_width=True)
 
     with col_data_mov:
         cant_t = len(transporte_zona)
         st.metric("Puntos de Transporte", cant_t)
-        if cant_t > 5: st.success("✅ **Excelente Conectividad:** Muchas opciones de ruta.")
-        elif cant_t > 0: st.warning("⚠️ **Conectividad Media:** Transporte disponible.")
-        else: st.error("❌ **Zona Apartada:** Dependencia de vehículo particular.")
+        
+        # Diagnóstico Cualitativo (Tu sugerencia)
+        if cant_t > 5:
+            st.success("✅ **Excelente Conectividad:**\nTienes muchas opciones de ruta cerca.")
+        elif cant_t > 0:
+            st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
+        else:
+            st.error("❌ **Zona Apartada:**\nDependerás de vehículo particular o caminatas largas.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 2: EDUCACIÓN
+    # SECCIÓN 2: EDUCACIÓN (MEJORADA CON DIAGNÓSTICO)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏫 2. ¿Dónde pueden estudiar tus hijos?")
@@ -588,7 +592,8 @@ elif st.session_state.step == 5:
         fig_e = go.Figure()
         fig_e.add_trace(go.Scattermapbox(
             lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
-            mode='lines', fill='toself', name='Zona', fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#8E44AD', width=2)
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(155, 89, 182, 0.1)', line=dict(color='#8E44AD', width=2)
         ))
         if not colegios_zona.empty:
             fig_e.add_trace(go.Scattermapbox(
@@ -602,7 +607,8 @@ elif st.session_state.step == 5:
             mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
         ))
         fig_e.update_layout(
-            mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
             mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False
         )
         st.plotly_chart(fig_e, use_container_width=True)
@@ -610,23 +616,31 @@ elif st.session_state.step == 5:
     with col_data_edu:
         cant_c = len(colegios_zona)
         st.metric("Total Colegios", cant_c)
-        if cant_c > 3: st.success("✅ **Alta Oferta Educativa:** Variedad de opciones.")
-        elif cant_c > 0: st.info("ℹ️ **Oferta Moderada:** Colegios accesibles.")
-        else: st.error("❌ **Déficit Educativo:** Sin colegios cercanos.")
         
+        # NUEVO: Diagnóstico Educativo (Tu solicitud)
+        if cant_c > 3:
+            st.success("✅ **Alta Oferta Educativa:**\nVariedad de opciones para las familias en el sector.")
+        elif cant_c > 0:
+            st.info("ℹ️ **Oferta Moderada:**\nHay colegios accesibles, aunque la variedad puede ser limitada.")
+        else:
+            st.error("❌ **Déficit Educativo:**\nNo se identifican colegios en el radio inmediato.")
+
         if not colegios_zona.empty:
-            st.caption("Por tipo:")
-            st.dataframe(colegios_zona['sector'].value_counts(), use_container_width=True)
+            st.caption("Distribución por tipo:")
+            conteo = colegios_zona['sector'].value_counts().reset_index()
+            conteo.columns = ['Tipo', 'Cantidad']
+            st.dataframe(conteo, hide_index=True)
 
     # -------------------------------------------------------------------------
     # SECCIÓN 3: ESTRATIFICACIÓN
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏘️ 3. ¿Cómo es el vecindario? (Estratos)")
-    st.markdown("Nivel socioeconómico predominante.")
+    st.markdown("Nivel socioeconómico predominante en las manzanas del sector.")
 
     if not manzanas_zona.empty:
         col_mapa_soc, col_data_soc = st.columns([2, 1])
+        
         with col_mapa_soc:
             manzanas_zona['estrato'] = manzanas_zona['estrato'].astype(int)
             fig_s = px.choropleth_mapbox(
@@ -637,49 +651,55 @@ elif st.session_state.step == 5:
                 color_discrete_map={1:'#C0392B', 2:'#E67E22', 3:'#F1C40F', 4:'#2ECC71', 5:'#3498DB', 6:'#8E44AD'}
             )
             fig_s.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False)
-            fig_s.add_trace(go.Scattermapbox(lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]), mode='lines', line=dict(color='black', width=2), name='Límite'))
+            fig_s.add_trace(go.Scattermapbox(
+                lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+                mode='lines', line=dict(color='black', width=2), name='Límite'
+            ))
             st.plotly_chart(fig_s, use_container_width=True)
+
         with col_data_soc:
-            st.info(f"Moda: **Estrato {manzanas_zona['estrato'].mode()[0]}**")
+            moda_estrato = manzanas_zona['estrato'].mode()[0]
+            st.info(f"El estrato más común es el **{moda_estrato}**.")
+            
             conteo_est = manzanas_zona['estrato'].value_counts().sort_index()
-            fig_b = go.Figure(data=[go.Bar(x=[f"E{i}" for i in conteo_est.index], y=conteo_est.values, marker_color='#95A5A6')])
+            fig_b = go.Figure(data=[go.Bar(
+                x=[f"E{i}" for i in conteo_est.index], y=conteo_est.values,
+                marker_color='#95A5A6'
+            )])
             fig_b.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_b, use_container_width=True)
     else:
-        st.warning("Sin datos residenciales.")
+        st.warning("No hay datos de vivienda en esta zona (puede ser parque o industrial).")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (CORREGIDO - LÓGICA MANZANA)
+    # SECCIÓN 4: POT (CORREGIDO PARA GARANTIZAR DATOS)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
-    st.markdown("Vocación normativa según el Decreto 555, proyectada sobre las manzanas.")
+    st.markdown("Reglas de juego del Plan de Ordenamiento Territorial vigente.")
 
-    if not manzanas_pot.empty:
+    if not areas_zona.empty:
         col_mapa_pot, col_data_pot = st.columns([2, 1])
         
         with col_mapa_pot:
-            # AHORA PINTAMOS MANZANAS (NO AREAS POT), COLOREADAS POR POT
             fig_p = px.choropleth_mapbox(
-                manzanas_pot, 
-                geojson=manzanas_pot.geometry, 
-                locations=manzanas_pot.index,
-                color="uso_pot_simplificado", 
-                mapbox_style="carto-positron", 
-                zoom=14.5,
+                areas_zona, geojson=areas_zona.geometry, locations=areas_zona.index,
+                color="uso_pot_simplificado", mapbox_style="carto-positron", zoom=14.5,
                 center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-                opacity=0.6, 
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                title="Vocación por Manzana"
+                opacity=0.5, color_discrete_sequence=px.colors.qualitative.Bold
             )
             fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False)
-            fig_p.add_trace(go.Scattermapbox(lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]), mode='lines', line=dict(color='black', width=2), name='Límite'))
+            fig_p.add_trace(go.Scattermapbox(
+                lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+                mode='lines', line=dict(color='black', width=2), name='Límite'
+            ))
             st.plotly_chart(fig_p, use_container_width=True)
 
         with col_data_pot:
-            st.info(f"Vocación Principal: **{uso_moda_pot}**")
+            uso_moda = areas_zona['uso_pot_simplificado'].mode()[0]
+            st.info(f"La vocación principal es: **{uso_moda}**")
             
-            conteo_uso = manzanas_pot['uso_pot_simplificado'].value_counts()
+            conteo_uso = areas_zona['uso_pot_simplificado'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
                 y=[l[:15] for l in conteo_uso.index], x=conteo_uso.values, orientation='h',
                 marker_color='#1ABC9C'
@@ -687,80 +707,58 @@ elif st.session_state.step == 5:
             fig_bp.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_bp, use_container_width=True)
     else:
-        st.warning("⚠️ No se pudo cruzar la información del POT con las manzanas de este sector.")
+        st.warning("⚠️ No se encontró normativa POT. Es posible que el punto esté en una vía principal o parque no zonificado.")
 
     # -------------------------------------------------------------------------
-    # CIERRE: SEGURIDAD Y HTML
+    # CIERRE: SEGURIDAD (FORMATO LISTA) Y REPORTE HTML
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🛡️ Contexto de Seguridad")
     
+    # Recuperar datos
     localidad_actual = st.session_state.localidad_sel
     datos_loc = localidades[localidades['nombre_localidad'] == localidad_actual].iloc[0]
     seguridad_raw = datos_loc.get('top_3_delitos', 'Dato no disponible')
     
-    # Formato Lista
+    # FORMATO LISTA PARA SEGURIDAD (Tu solicitud)
     if "," in seguridad_raw:
-        items = seguridad_raw.split(",")
-        lista_html = "".join([f"<li>{i.strip()}</li>" for i in items])
-        texto_seg = f"<ul>{lista_html}</ul>"
+        items_seguridad = seguridad_raw.split(",")
+        lista_html = ""
+        for item in items_seguridad:
+            lista_html += f"<li>{item.strip()}</li>"
+        texto_seguridad_final = f"<ul>{lista_html}</ul>"
     else:
-        texto_seg = seguridad_raw
+        texto_seguridad_final = seguridad_raw
 
+    # Usamos HTML directo para mostrar la lista bonita en pantalla
     st.markdown(f"""
     <div style="background-color: #FDEDEC; padding: 15px; border-left: 5px solid #C0392B; border-radius: 5px;">
-        <h4 style="color: #922B21; margin:0;">🚨 En {localidad_actual} ten cuidado con:</h4>
-        {texto_seg}
+        <h4 style="color: #922B21; margin:0;">🚨 Ten en cuenta:</h4>
+        <p>En <b>{localidad_actual}</b>, los delitos más reportados son:</p>
+        {texto_seguridad_final}
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.header("📑 Informe Ejecutivo")
     
-    # HTML Report Generation
+    # Botones finales
     gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
     
+    # HTML Simplificado para reporte
     html = f"""
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <style>
-            body {{ font-family: sans-serif; color: #333; }}
-            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
-            .box {{ border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9; }}
-            .title {{ color: #2980B9; border-bottom: 2px solid #2980B9; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>Reporte Bogotá Inteligente</h1>
-        </div>
-        <div class="box">
-            <h3 class="title">1. Ubicación</h3>
-            <p><strong>Localidad:</strong> {localidad_actual}</p>
-            <p><strong>Coords:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
-            <p><a href="{gmaps}">Ver en Google Maps</a></p>
-        </div>
-        <div class="box">
-            <h3 class="title">2. Entorno</h3>
-            <p><strong>Seguridad:</strong> {seguridad_raw}</p>
-            <p><strong>Vocación POT:</strong> {uso_moda_pot}</p>
-        </div>
-        <div class="box">
-            <h3 class="title">3. Servicios</h3>
-            <p><strong>Transporte:</strong> {len(transporte_zona)} estaciones.</p>
-            <p><strong>Educación:</strong> {len(colegios_zona)} colegios.</p>
-        </div>
-        <center><small>Generado por App Inteligencia Territorial 2025</small></center>
-    </body>
-    </html>
+    <h3>Reporte Bogotá Inteligente</h3>
+    <p><strong>Ubicación:</strong> {localidad_actual}</p>
+    <p><strong>Seguridad:</strong> {seguridad_raw}</p>
+    <p><strong>Transporte:</strong> {len(transporte_zona)} estaciones.</p>
+    <p><strong>Colegios:</strong> {len(colegios_zona)} instituciones.</p>
+    <p><a href="{gmaps}">Ver en Google Maps</a></p>
     """
     
-    col_fin1, col_fin2 = st.columns([2, 1])
+    col_fin1, col_fin2 = st.columns(2)
     with col_fin1:
-        st.download_button("📥 Descargar Reporte (HTML)", data=html, file_name="Reporte.html", mime="text/html", type="primary")
+        st.download_button("📥 Descargar Resumen (HTML)", data=html, file_name="Reporte.html", mime="text/html", type="primary")
     with col_fin2:
-        if st.button("🔄 Nueva Consulta"):
+        if st.button("🔄 Consultar otra zona"):
             for k in ['punto_lat', 'punto_lon', 'localidad_clic', 'localidad_sel']:
                 if k in st.session_state: del st.session_state[k]
             st.session_state.step = 2
