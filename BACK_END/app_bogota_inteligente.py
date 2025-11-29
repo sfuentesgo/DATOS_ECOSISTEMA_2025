@@ -7,29 +7,67 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 
-# --- Configuración de la Página (Estilo Institucional) ---
+# --- Configuración de la Página (Estilo Ciudadano) ---
 st.set_page_config(
-    page_title="Inteligencia Territorial Bogotá",
+    page_title="Bogotá a un Clic",
+    page_icon="💛",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Menú colapsado para más limpieza
 )
 
-# --- Encabezado y Contexto del Proyecto ---
-st.title("Sistema de Inteligencia Territorial de Bogotá")
-st.subheader("Análisis Estratégico basado en Datos Abiertos")
-
+# --- Inyección de Estilos (CSS) - Paleta Bogotá ---
+# Esto le da el toque visual único con los colores de la ciudad
 st.markdown("""
-Esta plataforma tecnológica permite la evaluación multidimensional del territorio mediante el procesamiento de datos oficiales de la infraestructura de datos espaciales de la ciudad de Bogotá.
+    <style>
+        /* Títulos en Rojo Bogotá */
+        h1 { color: #DA291C; font-family: 'Helvetica', sans-serif; font-weight: 800; }
+        h2, h3 { color: #2C3E50; }
+        
+        /* Resaltados en Amarillo */
+        .highlight { background-color: #F1C40F; padding: 2px 5px; border-radius: 3px; color: #000; font-weight: bold; }
+        
+        /* Caja de introducción limpia */
+        .intro-box { 
+            background-color: #f8f9fa; 
+            padding: 20px; 
+            border-left: 5px solid #DA291C; 
+            border-radius: 5px; 
+            font-size: 1.1em;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-**Alcance del Diagnóstico:**
-El sistema integra capas de información catastral, normativa (POT), seguridad ciudadana y cobertura de servicios para generar un perfil detallado de la vocación territorial en tres niveles de análisis:
+# --- Encabezado y Bienvenida ---
+st.title("Bogotá Visible: Tu Barrio en Datos 🏙️")
+st.subheader("Toma decisiones inteligentes sobre dónde vivir o invertir.")
 
-1.  **Contexto Administrativo y Seguridad:** Identificación de patrones delictivos y caracterización de localidades.
-2.  **Normativa y Socioeconomía:** Análisis de usos del suelo (Decreto 555) y estratificación.
-3.  **Accesibilidad y Servicios:** Evaluación de cobertura en transporte masivo y oferta educativa.
+# Texto introductorio amigable
+st.markdown("""
+<div class="intro-box">
+    ¿Alguna vez te has preguntado qué tan seguro es realmente un barrio, qué colegios tiene cerca o qué se puede construir allí?<br><br>
+    Esta herramienta conecta los <b>datos oficiales de la ciudad</b> contigo. Olvídate de los mapas complicados; aquí traducimos la información técnica en respuestas claras para que conozcas la vocación real de cualquier rincón de Bogotá.
+</div>
+""", unsafe_allow_html=True)
 
----
-""")
+st.write("") # Espacio vacío
+
+# Explicación de valor con iconos sencillos
+col_info1, col_info2, col_info3 = st.columns(3)
+
+with col_info1:
+    st.markdown("### 👮 Seguridad Real")
+    st.info("Conoce el **Top 3 de delitos** específicos de la zona. No es lo mismo un barrio donde roban celulares a uno con hurto de residencias.")
+
+with col_info2:
+    st.markdown("### 🏡 Tu Entorno")
+    st.warning("Descubre si el uso del suelo es **Residencial, Comercial o Industrial** según el POT vigente. Evita sorpresas ruidosas.")
+
+with col_info3:
+    st.markdown("### 🚌 Calidad de Vida")
+    st.success("Analiza qué tan fácil es moverte. Mide la cercanía a **Transporte Público (Transmilenio/SITP)** y colegios.")
+
+st.markdown("---")
+
 
 # --- Función de Carga de Datos (Conectada a DATOS_LIMPIOS) ---
 @st.cache_data
@@ -120,7 +158,7 @@ if st.session_state.step == 1:
                 # Botón de acción centrado y profesional
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
-                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True, color="#3498DB"):
+                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True):
                         st.session_state.step = 2
                         st.rerun()
             else:
