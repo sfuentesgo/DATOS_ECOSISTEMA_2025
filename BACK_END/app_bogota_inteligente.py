@@ -649,99 +649,98 @@ elif st.session_state.step == 5:
         st.warning("Sin datos residenciales.")
 
     # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (LÓGICA BLINDADA CON REPARACIÓN DE GEOMETRÍA)
+    # SECCIÓN 4: POT (LÓGICA BLINDADA: SEPARACIÓN DE GEOMETRÍAS)
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
-    st.markdown("Vocación normativa proyectada sobre cada manzana.")
+    st.markdown("Vocación normativa proyectada sobre cada manzana del sector.")
 
-    # 1. Preparación de Datos
-    manzanas_pot = manzanas_zona.copy()
+    # 1. Copia de seguridad de las manzanas originales (Polígonos)
+    # Usaremos esto para pintar el mapa final, así aseguramos que no desaparezcan.
+    manzanas_final = manzanas_zona.copy()
     
-    # 2. TRUCO GIS: Reparar geometrías inválidas (buffer(0))
-    # Esto arregla polígonos que se cruzan a sí mismos y fallan en el sjoin
-    areas_pot['geometry'] = areas_pot.geometry.buffer(0)
+    # Variable de control para saber si logramos clasificar
+    clasificacion_exitosa = False
+
+    if not manzanas_final.empty and not areas_pot.empty:
+        try:
+            # 2. Reparación de geometrías del POT (Por si acaso)
+            areas_pot['geometry'] = areas_pot.geometry.buffer(0)
+
+            # 3. Creamos un GeoDataFrame TEMPORAL solo de puntos (Centroides)
+            # Esto evita dañar los polígonos originales
+            puntos_temp = manzanas_final.copy()
+            puntos_temp['geometry'] = puntos_temp.to_crs(epsg=3116).centroid.to_crs(epsg=4326)
+            
+            # 4. Cruce Espacial: Puntos vs Áreas POT
+            # Usamos 'inner' para ver qué puntos caen dentro de qué áreas
+            cruce = gpd.sjoin(puntos_temp, areas_pot[['uso_pot_simplificado', 'geometry']], how='inner', predicate='intersects')
+            
+            # 5. Eliminamos duplicados (por si un punto cae en dos áreas, nos quedamos con la primera)
+            cruce = cruce[~cruce.index.duplicated(keep='first')]
+            
+            # 6. Pasamos el dato encontrado al mapa original (Join por Índice)
+            manzanas_final['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
+            
+            # Rellenamos lo que no cruzó
+            manzanas_final['uso_pot_simplificado'] = manzanas_final['uso_pot_simplificado'].fillna('Sin Clasificación')
+            
+            clasificacion_exitosa = True
+            
+        except Exception as e:
+            st.error(f"Nota técnica: No se pudo clasificar el suelo ({str(e)}). Se muestran manzanas base.")
+            manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
+    else:
+        manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
+
+    # 7. VISUALIZACIÓN (Siempre se ejecuta, tenga o no datos del POT)
+    col_mapa_pot, col_data_pot = st.columns([2, 1])
     
-    # 3. Calcular Centroides para el cruce
-    manzanas_pot['centroid'] = manzanas_pot.to_crs(epsg=3116).centroid.to_crs(epsg=4326)
-    
-    # 4. CRUCE ESPACIAL (Spatial Join)
-    # Usamos set_geometry con el centroide
-    try:
-        manzanas_pot = manzanas_pot.set_geometry('centroid')
-        
-        # Hacemos el join. Si 'within' falla, intentamos 'intersects' que es más permisivo
-        manzanas_pot = gpd.sjoin(
-            manzanas_pot, 
-            areas_pot[['uso_pot_simplificado', 'geometry']], 
-            how='left', 
-            predicate='intersects' # Cambiado a intersects para mayor tolerancia
+    with col_mapa_pot:
+        # Definimos colores fijos para que se vea bonito
+        # Si todo es "Sin Clasificación", saldrá gris.
+        fig_p = px.choropleth_mapbox(
+            manzanas_final, 
+            geojson=manzanas_final.geometry, 
+            locations=manzanas_final.index,
+            color="uso_pot_simplificado", 
+            mapbox_style="carto-positron", 
+            zoom=14.5,
+            center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            opacity=0.6, 
+            title="Vocación por Manzana",
+            color_discrete_map={'Sin Clasificación': '#95A5A6'} # Gris por defecto
         )
+        fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True)
         
-        # Volvemos a la geometría original (Polígono)
-        manzanas_pot = manzanas_pot.set_geometry('geometry')
-        
-        # Rellenar vacíos
-        manzanas_pot['uso_pot_simplificado'] = manzanas_pot['uso_pot_simplificado'].fillna('Sin Clasificación')
-        
-        # Verificar si hay datos
-        datos_encontrados = manzanas_pot['uso_pot_simplificado'].nunique() > 1
-        
-    except Exception as e:
-        st.error(f"Error técnico en cruce POT: {e}")
-        manzanas_pot = gpd.GeoDataFrame()
-        datos_encontrados = False
+        # Borde del área
+        fig_p.add_trace(go.Scattermapbox(
+            lat=list(area_interes.exterior.xy[1]), 
+            lon=list(area_interes.exterior.xy[0]), 
+            mode='lines', 
+            line=dict(color='black', width=2), 
+            name='Límite'
+        ))
+        st.plotly_chart(fig_p, use_container_width=True)
 
-    if not manzanas_pot.empty and datos_encontrados:
-        col_mapa_pot, col_data_pot = st.columns([2, 1])
+    with col_data_pot:
+        # Estadísticas
+        conteo = manzanas_final['uso_pot_simplificado'].value_counts()
         
-        with col_mapa_pot:
-            # MAPA COLOREADO
-            fig_p = px.choropleth_mapbox(
-                manzanas_pot, 
-                geojson=manzanas_pot.geometry, 
-                locations=manzanas_pot.index,
-                color="uso_pot_simplificado", 
-                mapbox_style="carto-positron", 
-                zoom=14.5,
-                center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
-                opacity=0.6, 
-                title="Vocación por Manzana",
-                # Colores distintos para que se note la diferencia
-                color_discrete_sequence=px.colors.qualitative.Prism
-            )
-            fig_p.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=False)
+        if clasificacion_exitosa and len(conteo) > 0:
+            moda = conteo.index[0]
+            st.info(f"Vocación Principal: **{moda}**")
             
-            # Límite
-            fig_p.add_trace(go.Scattermapbox(
-                lat=list(area_interes.exterior.xy[1]), 
-                lon=list(area_interes.exterior.xy[0]), 
-                mode='lines', 
-                line=dict(color='black', width=2), 
-                name='Límite'
-            ))
-            st.plotly_chart(fig_p, use_container_width=True)
-
-        with col_data_pot:
-            # Calcular Moda (quitando 'Sin Clasificación' si es posible)
-            serie_usos = manzanas_pot[manzanas_pot['uso_pot_simplificado'] != 'Sin Clasificación']['uso_pot_simplificado']
-            
-            if not serie_usos.empty:
-                uso_moda = serie_usos.mode()[0]
-            else:
-                uso_moda = "Zona sin reglamentación específica"
-                
-            st.info(f"Vocación Principal: **{uso_moda}**")
-            
-            conteo_uso = manzanas_pot['uso_pot_simplificado'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
-                y=[l[:15] for l in conteo_uso.index], x=conteo_uso.values, orientation='h',
+                y=[l[:20] for l in conteo.index], 
+                x=conteo.values, 
+                orientation='h',
                 marker_color='#1ABC9C'
             )])
-            fig_bp.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            fig_bp.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_bp, use_container_width=True)
-    else:
-        st.warning("⚠️ El cruce de datos no arrojó resultados. Es posible que las manzanas seleccionadas no tengan clasificación POT asignada en la base de datos.")
+        else:
+            st.warning("No se identificó normativa específica para las manzanas seleccionadas.")
 
     # -------------------------------------------------------------------------
     # CIERRE: SEGURIDAD Y HTML
@@ -768,57 +767,7 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.header("📑 Informe Ejecutivo")
     
-    # HTML Report Generation
-    gmaps = f"https://www.google.com/maps/search/?api=1&query={st.session_state.punto_lat},{st.session_state.punto_lon}"
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <style>
-            body {{ font-family: sans-serif; color: #333; }}
-            .header {{ background: #2C3E50; color: white; padding: 20px; text-align: center; }}
-            .box {{ border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9; }}
-            .title {{ color: #2980B9; border-bottom: 2px solid #2980B9; }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>Reporte Bogotá Inteligente</h1>
-        </div>
-        <div class="box">
-            <h3 class="title">1. Ubicación</h3>
-            <p><strong>Localidad:</strong> {localidad_actual}</p>
-            <p><strong>Coords:</strong> {st.session_state.punto_lat:.5f}, {st.session_state.punto_lon:.5f}</p>
-            <p><a href="{gmaps}">Ver en Google Maps</a></p>
-        </div>
-        <div class="box">
-            <h3 class="title">2. Entorno</h3>
-            <p><strong>Seguridad:</strong> {seguridad_raw}</p>
-            <p><strong>Vocación POT:</strong> {uso_moda if 'uso_moda' in locals() else 'N/A'}</p>
-        </div>
-        <div class="box">
-            <h3 class="title">3. Servicios</h3>
-            <p><strong>Transporte:</strong> {len(transporte_zona)} estaciones.</p>
-            <p><strong>Educación:</strong> {len(colegios_zona)} colegios.</p>
-        </div>
-        <center><small>Generado por App Inteligencia Territorial 2025</small></center>
-    </body>
-    </html>
-    """
-    
-    col_fin1, col_fin2 = st.columns([2, 1])
-    with col_fin1:
-        st.download_button("📥 Descargar Reporte (HTML)", data=html, file_name="Reporte.html", mime="text/html", type="primary")
-    with col_fin2:
-        if st.button("🔄 Nueva Consulta"):
-            for k in ['punto_lat', 'punto_lon', 'localidad_clic', 'localidad_sel']:
-                if k in st.session_state: del st.session_state[k]
-            st.session_state.step = 2
-            st.rerun()
     # -------------------------------------------------------------------------
     # 5. REPORTE HTML (CORREGIDO: MAPA GOOGLE Y SIN BOTÓN PRO)
     # -------------------------------------------------------------------------
