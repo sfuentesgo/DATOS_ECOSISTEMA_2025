@@ -666,14 +666,14 @@ elif st.session_state.step == 5:
     # Usamos set_geometry para hacer el join usando el PUNTO central, no el polígono
     try:
         manzanas_pot = manzanas_pot.set_geometry('centroid')
-        manzanas_pot = gpd.sjoin(manzanas_pot, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='within')
+        manzanas_pot = gpd.sjoin(manzanas_pot, areas_pot[['nombre_area', 'geometry']], how='left', predicate='within')
         
         # Volvemos a poner la geometría original (el polígono) para poder pintarlo
         # (Importante: sjoin a veces borra la geometría original si no se cuida)
         manzanas_pot = manzanas_pot.set_geometry('geometry')
         
         # Rellenar vacíos
-        manzanas_pot['uso_pot_simplificado'] = manzanas_pot['uso_pot_simplificado'].fillna('Sin Clasificación')
+        manzanas_pot['nombre_area'] = manzanas_pot['nombre_area'].fillna('Sin Clasificación')
     except Exception as e:
         st.error(f"Error técnico en cruce POT: {e}")
         manzanas_pot = gpd.GeoDataFrame()
@@ -687,7 +687,7 @@ elif st.session_state.step == 5:
                 manzanas_pot, 
                 geojson=manzanas_pot.geometry, 
                 locations=manzanas_pot.index,
-                color="uso_pot_simplificado", 
+                color="nombre_area", 
                 mapbox_style="carto-positron", 
                 zoom=14.5,
                 center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
@@ -700,10 +700,10 @@ elif st.session_state.step == 5:
             st.plotly_chart(fig_p, use_container_width=True)
 
         with col_data_pot:
-            uso_moda = manzanas_pot['uso_pot_simplificado'].mode()[0]
+            uso_moda = manzanas_pot['nombre_area'].mode()[0]
             st.info(f"Vocación Principal: **{uso_moda}**")
             
-            conteo_uso = manzanas_pot['uso_pot_simplificado'].value_counts()
+            conteo_uso = manzanas_pot['nombre_area'].value_counts()
             fig_bp = go.Figure(data=[go.Bar(
                 y=[l[:15] for l in conteo_uso.index], x=conteo_uso.values, orientation='h',
                 marker_color='#1ABC9C'
