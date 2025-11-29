@@ -99,11 +99,19 @@ def cargar_datasets():
         try:
             url_completa = f"{BASE_URL}{nombre_archivo}"
             
-            # Lectura directa con Geopandas
+            # Lectura directa
             gdf = gpd.read_file(url_completa)
             
-            # Aseguramos proyección WGS84 para compatibilidad web
-            if gdf.crs != "EPSG:4326":
+            # --- CORRECCIÓN FORZADA ---
+            # Si es el archivo de áreas (u otro que sepas que viene en metros),
+            # forzamos el sistema de origen correcto (Magna-Sirgas Bogotá).
+            if nombre_clave == "areas":  
+                # allow_override=True es clave por si el archivo traía una etiqueta errónea
+                gdf.set_crs(epsg=3116, allow_override=True, inplace=True)
+
+            # --- AHORA SÍ CONVERTIMOS ---
+            # Como ya le dijimos arriba que es 3116, esto ahora será TRUE y convertirá
+            if gdf.crs.to_string() != "EPSG:4326":
                 gdf = gdf.to_crs("EPSG:4326")
                 
             dataframes[nombre_clave] = gdf
