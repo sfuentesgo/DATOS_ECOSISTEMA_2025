@@ -19,7 +19,7 @@ st.title("Sistema de Inteligencia Territorial de Bogotá")
 st.subheader("Análisis Estratégico basado en Datos Abiertos")
 
 st.markdown("""
-Esta plataforma tecnológica permite la evaluación multidimensional del territorio mediante el procesamiento de datos oficiales de la infraestructura de datos espaciales de Bogotá.
+Esta plataforma tecnológica permite la evaluación multidimensional del territorio mediante el procesamiento de datos oficiales de la infraestructura de datos espaciales de la ciudad de Bogotá.
 
 **Alcance del Diagnóstico:**
 El sistema integra capas de información catastral, normativa (POT), seguridad ciudadana y cobertura de servicios para generar un perfil detallado de la vocación territorial en tres niveles de análisis:
@@ -43,11 +43,11 @@ def cargar_datasets():
     
     # Mapeo de archivos según la arquitectura de datos definida
     archivos = {
-        "localidades": "dim_localidad.geojson",
+        "localidades": "dim_localidad.geojson", # mapa de localidades y contexto de seguridad basado en DAI
         "areas":       "dim_area.geojson",     # Usos del suelo POT
         "manzanas":    "tabla_hechos.geojson", # Estratificación
-        "transporte":  "dim_transporte.geojson",
-        "colegios":    "dim_colegios.geojson"
+        "transporte":  "dim_transporte.geojson", # datos de estaciones de transmilenio
+        "colegios":    "dim_colegios.geojson" # datos secretaria de educacion colegios en bogota
     }
     
     dataframes = {}
@@ -93,7 +93,7 @@ if st.session_state.step == 1:
     *El sistema validará automáticamente la proyección espacial (EPSG:4326) requerida para la visualización web.*
     """)
 
-    # Componente de estado para feedback técnico profesional
+    # Componente de estado para feedback 
     with st.status("Ejecutando protocolo de conexión...", expanded=True) as status:
         st.write("Estableciendo enlace con fuentes de datos...")
         
@@ -102,7 +102,7 @@ if st.session_state.step == 1:
             dataframes = cargar_datasets()
             
             if dataframes:
-                # Simulamos pasos de validación para dar confianza al usuario experto
+                # Simulamos pasos de validación para dar confianza al usuario
                 st.write("Validando geometría de Localidades y Manzanas... OK")
                 st.write("Verificando índices de seguridad ciudadana... OK")
                 st.write("Cargando capas de infraestructura (Transporte y Educación)... OK")
@@ -120,7 +120,7 @@ if st.session_state.step == 1:
                 # Botón de acción centrado y profesional
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
-                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True):
+                    if st.button("Iniciar Diagnóstico Territorial", type="primary", use_container_width=True, color="green"):
                         st.session_state.step = 2
                         st.rerun()
             else:
