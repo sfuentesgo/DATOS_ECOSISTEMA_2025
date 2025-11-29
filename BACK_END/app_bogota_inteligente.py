@@ -137,44 +137,52 @@ if st.session_state.step == 1:
     * 🚌 **Infraestructura:** Red oficial de Transmilenio y Educación.
     """)
 
-    # Componente de estado amigable
-    with st.status("Sincronizando datos oficiales...", expanded=True) as status:
-        st.write("📥 Descargando mapas de localidades...")
-        
+    # --- CSS PARA BOTÓN VERDE (Personalizado para esta sección) ---
+    st.markdown("""
+        <style>
+        /* Forzamos el estilo del botón solo para que sea Verde Éxito */
+        div.stButton > button {
+            background-color: #27AE60 !important; /* Verde Esmeralda */
+            color: white !important;
+            font-weight: bold;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+        }
+        div.stButton > button:hover {
+            background-color: #2ECC71 !important; /* Verde más claro al pasar mouse */
+            color: white !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Usamos spinner: Es invisible, solo muestra un relojito y desaparece al terminar
+    with st.spinner("⏳ Sincronizando mapas y estadísticas oficiales... por favor espera."):
         try:
-            # Ejecutamos la función de carga
+            # Ejecutamos la carga (Si ya está en caché, es instantáneo)
             dataframes = cargar_datasets()
             
             if dataframes:
-                # Mensajes de validación entendibles
-                st.write("✅ Verificando calidad de los mapas... OK")
-                st.write("✅ Cargando estadísticas de seguridad... OK")
-                st.write("✅ Ubicando estaciones y colegios... OK")
-                
-                # Almacenamos los datasets en la memoria
+                # Guardamos en memoria silenciosamente
                 st.session_state.update(dataframes)
                 
-                # Finalizamos el estado
-                status.update(label="¡Datos listos! Conexión exitosa.", state="complete", expanded=False)
-                
-                st.success("Toda la información ha sido validada. Estamos listos para comenzar.")
+                # Mensaje de éxito limpio
+                st.success("✅ **¡Conexión Exitosa!** Todos los datos de Bogotá están listos para tu análisis.")
                 
                 st.markdown("---")
                 
-                # Botón de acción claro
+                # Botón de acción centrado (Ahora será VERDE gracias al CSS de arriba)
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
-                    if st.button("📍 Comenzar a Explorar", type="primary", use_container_width=True):
+                    if st.button("📍 Comenzar a Explorar", use_container_width=True):
                         st.session_state.step = 2
                         st.rerun()
             else:
-                status.update(label="Error de conexión", state="error")
-                st.error("No pudimos conectar con los datos de Bogotá. Revisa tu internet e intenta de nuevo.")
+                st.error("❌ No pudimos conectar con los datos. Por favor revisa tu internet.")
                 
         except Exception as e:
-            status.update(label="Algo salió mal", state="error")
-            st.error(f"Error técnico: {e}")
-            
+            st.error(f"Ocurrió un error técnico: {e}")
+
 # ==============================================================================
 # PASO 2: SELECCIÓN DE UNIDAD ADMINISTRATIVA Y CONTEXTO
 # ==============================================================================
