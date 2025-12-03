@@ -965,7 +965,10 @@ if st.session_state.step == 5:
             
         except Exception as e:
             html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
+    
 
+    ruta_logo = base64.b64encode(img_bytes).decode('utf-8')
+    html_logo = f'<img src="data:image/png;base64,{ruta_logo}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
     # --- 4. PLANTILLA HTML (TEXTOS Y TABLAS) ---
     html_report = f"""
     <!DOCTYPE html>
@@ -989,7 +992,7 @@ if st.session_state.step == 5:
     </head>
     <body>
         <div class="header">
-            <img src="{ruta_logo}">
+            <img src="{html_logo}">
             <h1 style="margin:0;">Ficha de Inteligencia Territorial</h1>
             <p style="margin:5px 0 0;">Bogotá D.C. | Localidad {localidad}</p>
         </div>
