@@ -808,123 +808,224 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 # ==============================================================================
-# PASO 5: REPORTE EJECUTIVO (FINAL BLINDADO CON ESTRATO)
+# PASO 5: RESULTADOS Y GENERACIÓN DE INFORME (COMPLETO)
 # ==============================================================================
-if st.session_state.step == 5: 
+elif st.session_state.step == 5:
     import base64
     import plotly.graph_objects as go
+    import plotly.express as px
     import geopandas as gpd
 
+    st.header("📊 Resultados de tu Análisis")
+
+    st.info(f"""
+    **Estás analizando:** Un radio de **{st.session_state.radio_analisis} metros** a la redonda.
+    📍 **Punto exacto:** En la localidad de **{st.session_state.localidad_sel}**.
+    """)
+
+    # -------------------------------------------------------------------------
+    # 1. MOTOR DE CÁLCULO ESPACIAL (Recuperación de datos)
+    # -------------------------------------------------------------------------
+    localidades = st.session_state.localidades
+    manzanas    = st.session_state.manzanas
+    transporte  = st.session_state.transporte
+    colegios    = st.session_state.colegios
+    areas_pot   = st.session_state.areas
+
+    # 1.1 Buffer Geodésico
+    punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
+    gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
+    gdf_buffer = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis).to_crs(epsg=4326)
+    area_interes = gdf_buffer.iloc[0]
+
+    # 1.2 Filtros Espaciales (Datos dentro del círculo)
+    transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
+    colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
+    manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
+
+    # -------------------------------------------------------------------------
+    # SECCIÓN 1: MOVILIDAD
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🚌 1. ¿Qué tan fácil es moverse?")
+    
+    col_mov1, col_mov2 = st.columns([2, 1])
+    with col_mov1:
+        fig_t = go.Figure()
+        fig_t.add_trace(go.Scattermapbox(
+            lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+            mode='lines', fill='toself', fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2), name='Zona'
+        ))
+        if not transporte_zona.empty:
+            fig_t.add_trace(go.Scattermapbox(
+                lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
+                mode='markers', marker=dict(size=10, color='#E74C3C'), name='Estaciones'
+            ))
+        fig_t.update_layout(mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon}, mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=300, showlegend=False)
+        st.plotly_chart(fig_t, use_container_width=True)
+    
+    with col_mov2:
+        st.metric("Estaciones TM/SITP", len(transporte_zona))
+        if len(transporte_zona) > 2: st.success("✅ Buena Conectividad")
+        else: st.warning("⚠️ Conectividad Baja")
+
+    # -------------------------------------------------------------------------
+    # SECCIÓN 2: EDUCACIÓN
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🏫 2. Oferta Educativa")
+    
+    col_edu1, col_edu2 = st.columns([2, 1])
+    with col_edu1:
+        fig_e = go.Figure()
+        fig_e.add_trace(go.Scattermapbox(
+            lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+            mode='lines', fill='toself', fillcolor='rgba(142, 68, 173, 0.1)', line=dict(color='#8E44AD', width=2), name='Zona'
+        ))
+        if not colegios_zona.empty:
+            fig_e.add_trace(go.Scattermapbox(
+                lat=colegios_zona.geometry.y, lon=colegios_zona.geometry.x,
+                mode='markers', marker=dict(size=10, color='#8E44AD'), name='Colegios'
+            ))
+        fig_e.update_layout(mapbox_style="carto-positron", mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon}, mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=300, showlegend=False)
+        st.plotly_chart(fig_e, use_container_width=True)
+        
+    with col_edu2:
+        st.metric("Colegios Cercanos", len(colegios_zona))
+        if len(colegios_zona) > 1: st.success("✅ Buena Oferta")
+        else: st.error("❌ Oferta Limitada")
+
+    # -------------------------------------------------------------------------
+    # SECCIÓN 3: ESTRATO
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🏘️ 3. Estratificación")
+    if not manzanas_zona.empty:
+        estrato_moda = int(manzanas_zona['estrato'].mode()[0])
+        st.info(f"El estrato predominante en el sector es: **{estrato_moda}**")
+    else:
+        estrato_moda = "N/A"
+        st.warning("No hay información residencial disponible.")
+
+    # -------------------------------------------------------------------------
+    # SECCIÓN 4: POT (Cálculo clave para el reporte)
+    # -------------------------------------------------------------------------
+    st.markdown("---")
+    st.markdown("### 🏗️ 4. Normativa POT")
+    
+    # Preparamos el DF principal para el reporte
+    df_reporte = manzanas_zona.copy()
+    
+    # Hacemos el cruce espacial SIEMPRE para asegurar el dato
+    if not areas_pot.empty:
+        try:
+            if areas_pot.crs != df_reporte.crs:
+                areas_pot = areas_pot.to_crs(df_reporte.crs)
+            # Cruce
+            cruce = gpd.sjoin(df_reporte, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='intersects')
+            cruce = cruce[~cruce.index.duplicated(keep='first')]
+            df_reporte['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
+        except:
+            pass
+
+    # Validamos columna
+    if 'uso_pot_simplificado' not in df_reporte.columns:
+        df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
+    
+    # Calculamos la moda
+    uso_moda = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()[0]
+    st.success(f"Vocación del suelo: **{uso_moda}**")
+
+    # -------------------------------------------------------------------------
+    # SECCIÓN 5: SEGURIDAD Y REPORTE HTML
+    # -------------------------------------------------------------------------
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # --- 1. RECUPERACIÓN Y PROCESAMIENTO DE DATOS ---
-    
-    # A. Recuperar GeoDataFrame base (Manzanas)
-    # Intentamos usar la variable procesada en el paso anterior. Si no existe, la regeneramos.
-    if 'manzanas_final' in locals() and not manzanas_final.empty:
-        df_reporte = manzanas_final.copy()
-    else:
-        # Fallback: Usamos la zona recortada y cruzamos con POT si es necesario
-        df_reporte = manzanas_zona.copy()
-        if not areas_pot.empty:
-            try:
-                # Asegurar CRS
-                if areas_pot.crs != df_reporte.crs:
-                    areas_pot = areas_pot.to_crs(df_reporte.crs)
-                
-                # Cruce espacial (Spatial Join)
-                cruce = gpd.sjoin(df_reporte, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='intersects')
-                cruce = cruce[~cruce.index.duplicated(keep='first')]
-                df_reporte['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
-            except:
-                pass # Si falla, se manejará como "Sin Clasificación" abajo
-    
-    # B. Calcular KPIs (Los 5 puntos clave)
-    
-    # 1. Transporte
-    num_tm = len(transporte_zona)
-    
-    # 2. Educación
-    num_col = len(colegios_zona)
-    
-    # 3. Normativa (POT) - Moda
-    if 'uso_pot_simplificado' not in df_reporte.columns:
-        df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
-    uso_moda = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()[0]
-    
-    # 4. Estratificación - Moda (NUEVO)
-    try:
-        if 'estrato' in df_reporte.columns:
-            estrato_moda = int(df_reporte['estrato'].mode()[0])
-        else:
-            estrato_moda = "N/A"
-    except:
-        estrato_moda = "N/A"
-
-    # 5. Seguridad
+    # A. Datos de Seguridad
     localidad = st.session_state.localidad_sel
     datos_loc = localidades[localidades['nombre_localidad'] == localidad].iloc[0]
     seguridad_texto = datos_loc.get('top_3_delitos', 'No disponible')
+    
+    # Formato Lista HTML para el reporte
+    if "," in seguridad_texto:
+        items_seg = seguridad_texto.split(",")
+        lista_seguridad_html = "<ul style='margin-top:5px; margin-bottom:5px; text-align:left;'>"
+        for item in items_seg:
+            lista_seguridad_html += f"<li>{item.strip()}</li>"
+        lista_seguridad_html += "</ul>"
+    else:
+        lista_seguridad_html = f"<p>{seguridad_texto}</p>"
 
-    # C. Variables de Contexto
-    radio = st.session_state.radio_analisis
+    # Muestra visual en pantalla
+    st.markdown(f"""
+    <div style="background-color: #FDEDEC; padding: 15px; border-left: 5px solid #C0392B; border-radius: 5px;">
+        <h4 style="color: #922B21; margin:0;">🚨 En {localidad} ten cuidado con:</h4>
+        {lista_seguridad_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # B. Variables para el Reporte
+    num_tm = len(transporte_zona)
+    num_col = len(colegios_zona)
     lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
+    radio = st.session_state.radio_analisis
 
-    # --- 2. ALGORITMO DE SCORING (VIABILIDAD) ---
+    # C. Algoritmo de Scoring (Dictamen)
     score = 0
-    # Criterio 1: Conectividad Robusta
     if num_tm >= 2: score += 1
-    # Criterio 2: Cobertura Servicios
     if num_col >= 1: score += 1
-    # Criterio 3: Certeza Normativa
     if uso_moda != "Sin Clasificación": score += 1
     
     dictamen = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" # Verde, Naranja, Rojo
+    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
 
-    # --- 3. GENERACIÓN DE IMAGEN (MAPA LIMPIO) ---
-    with st.spinner("Generando mapa de ubicación..."):
+    # D. Generación del Mapa Estático (Para el PDF/HTML)
+    with st.spinner("Generando mapa detallado para el informe..."):
         try:
             fig_mapa = go.Figure()
 
-            # Dibujar el Radio (Círculo azul)
-            if 'area_interes' in locals():
-                lats_poly = list(area_interes.exterior.xy[1])
-                lons_poly = list(area_interes.exterior.xy[0])
+            # 1. Radio (Azul)
+            lats_poly = list(area_interes.exterior.xy[1])
+            lons_poly = list(area_interes.exterior.xy[0])
+            fig_mapa.add_trace(go.Scattermapbox(
+                lat=lats_poly, lon=lons_poly, mode='lines', fill='toself',
+                fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498DB', width=2)
+            ))
+
+            # 2. Estaciones (Rojo)
+            if not transporte_zona.empty:
                 fig_mapa.add_trace(go.Scattermapbox(
-                    lat=lats_poly, lon=lons_poly,
-                    mode='lines', fill='toself',
-                    fillcolor='rgba(52, 152, 219, 0.2)',
-                    line=dict(color='#3498DB', width=2),
-                    name='Radio Análisis'
+                    lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x,
+                    mode='markers', marker=dict(size=8, color='#E74C3C')
                 ))
 
-            # Dibujar el PIN (Usuario)
+            # 3. Colegios (Morado)
+            if not colegios_zona.empty:
+                fig_mapa.add_trace(go.Scattermapbox(
+                    lat=colegios_zona.geometry.y, lon=colegios_zona.geometry.x,
+                    mode='markers', marker=dict(size=8, color='#8E44AD')
+                ))
+
+            # 4. Pin Usuario (Negro)
             fig_mapa.add_trace(go.Scattermapbox(
-                lat=[lat], lon=[lon],
-                mode='markers',
-                marker=dict(size=15, color='red', symbol='marker'),
-                name='Punto Interés'
+                lat=[lat], lon=[lon], mode='markers',
+                marker=dict(size=12, color='black', symbol='circle')
             ))
 
             fig_mapa.update_layout(
-                mapbox_style="carto-positron",
-                mapbox_zoom=14.5,
+                mapbox_style="carto-positron", mapbox_zoom=14.5,
                 mapbox_center={"lat": lat, "lon": lon},
-                margin={"r":0,"t":0,"l":0,"b":0},
-                showlegend=False
+                margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False
             )
             
-            # Exportar a Base64
             img_bytes = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
             b64_mapa = base64.b64encode(img_bytes).decode('utf-8')
             html_mapa = f'<img src="data:image/png;base64,{b64_mapa}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
-            
         except Exception as e:
-            html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
+            html_mapa = f"<div>Error mapa: {str(e)}</div>"
 
-    # --- 4. PLANTILLA HTML (FICHA TÉCNICA COMPLETA) ---
+    # E. Plantilla HTML Final
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -932,86 +1033,77 @@ if st.session_state.step == 5:
         <meta charset="UTF-8">
         <style>
             body {{ font-family: 'Helvetica', sans-serif; max-width: 800px; margin: 0 auto; color: #333; }}
-            .header {{ text-align: center; padding: 25px; background: #2C3E50; color: white; border-radius: 0 0 10px 10px; }}
+            .header {{ text-align: center; padding: 20px; background: #2C3E50; color: white; border-radius: 0 0 10px 10px; }}
             .card {{ border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-            .kpi-container {{ display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }}
-            .kpi-box {{ flex: 1; background: #F8F9F9; padding: 15px; text-align: center; border-radius: 8px; border-top: 4px solid #2980B9; }}
-            .kpi-val {{ font-size: 20px; font-weight: bold; color: #2C3E50; display: block; }}
-            .kpi-label {{ font-size: 11px; color: #777; text-transform: uppercase; margin-top: 5px; display:block; }}
-            .dictamen {{ margin-top: 20px; padding: 15px; background: {color_fondo}; color: white; text-align: center; font-size: 20px; font-weight: bold; border-radius: 8px; }}
-            .security-box {{ margin-top: 15px; padding: 15px; background: #FDEDEC; border-left: 5px solid #C0392B; color: #922B21; font-size: 14px; }}
-            .meta-info {{ font-size: 14px; color: #555; margin-bottom: 15px; }}
-            .highlight {{ background-color: #F1C40F; padding: 2px 5px; border-radius: 3px; font-weight: bold; color: black; }}
+            .intro {{ font-style: italic; color: #555; font-size: 14px; margin-bottom: 15px; }}
+            .kpi-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            .kpi-table th {{ background: #F4F6F7; padding: 10px; border: 1px solid #ddd; font-size: 12px; color: #777; }}
+            .kpi-table td {{ padding: 15px; text-align: center; border: 1px solid #ddd; font-weight: bold; color: #2C3E50; }}
+            .dictamen {{ margin-top: 20px; padding: 20px; background: {color_fondo}; color: white; text-align: center; border-radius: 8px; }}
         </style>
     </head>
     <body>
         <div class="header">
-            <h1 style="margin:0;">Ficha de Inteligencia Territorial</h1>
+            <h2 style="margin:0;">Ficha de Inteligencia Territorial</h2>
             <p style="margin:5px 0 0;">Bogotá D.C. | Localidad {localidad}</p>
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 1. Ubicación y Entorno</h3>
-            
-            <div class="meta-info">
-                Coordenadas: {lat:.5f}, {lon:.5f} | Radio: {radio}m <br>
-                <span style="margin-top:5px; display:inline-block;">Nivel Socioeconómico Predominante: <span class="highlight">Estrato {estrato_moda}</span></span>
-            </div>
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 Análisis de Entorno</h3>
+            <p class="intro">
+                Una vez evaluada la zona seleccionada en las coordenadas ({lat:.4f}, {lon:.4f}), 
+                se presentan los factores determinantes de infraestructura y normativa:
+            </p>
             
             {html_mapa}
             
-            <div class="kpi-container">
-                <div class="kpi-box">
-                    <span class="kpi-val">{num_tm}</span>
-                    <span class="kpi-label">Estaciones TM</span>
-                </div>
-                <div class="kpi-box">
-                    <span class="kpi-val">{num_col}</span>
-                    <span class="kpi-label">Colegios</span>
-                </div>
-                <div class="kpi-box">
-                    <span class="kpi-val" style="font-size:13px; line-height: 1.2; padding-top:5px;">{uso_moda}</span>
-                    <span class="kpi-label">Normativa POT</span>
-                </div>
-            </div>
+            <table class="kpi-table">
+                <tr>
+                    <th>ESTACIONES TM (Rojo)</th>
+                    <th>COLEGIOS (Morado)</th>
+                    <th>ESTRATO MODA</th>
+                    <th>NORMATIVA POT</th>
+                </tr>
+                <tr>
+                    <td>{num_tm}</td>
+                    <td>{num_col}</td>
+                    <td>{estrato_moda}</td>
+                    <td style="font-size:14px;">{uso_moda}</td>
+                </tr>
+            </table>
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ 2. Contexto de Seguridad</h3>
-            <div class="security-box">
-                <strong>🚨 Top 3 Incidentes en la zona:</strong><br>
-                {seguridad_texto}
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ Contexto de Seguridad</h3>
+            <p class="intro">
+                A nivel de la localidad, es prudente destacar que el entorno de seguridad se caracteriza 
+                por la prevalencia de los siguientes incidentes:
+            </p>
+            <div style="background:#FDEDEC; padding:10px; border-left:4px solid #C0392B; color:#922B21;">
+                {lista_seguridad_html}
             </div>
         </div>
 
         <div class="dictamen">
-            DICTAMEN TÉCNICO: {dictamen}
+            <p style="margin:0; font-size:12px;">DICTAMEN TÉCNICO (Algoritmo Aditivo)</p>
+            <h2 style="margin:5px 0;">{dictamen}</h2>
         </div>
         
-        <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
-            Reporte generado automáticamente el 28/11/2025 por Bogotá Inteligente
+        <div style="text-align: center; margin-top: 20px; color: #999; font-size: 10px;">
+            Generado el 28/11/2025 por Bogotá Inteligente
         </div>
     </body>
     </html>
     """
 
-    # --- 5. ZONA DE DESCARGA Y REINICIO ---
-    col1, col2 = st.columns([2, 1])
+    # F. Botones de Acción
+    col_btn, col_reset = st.columns([2, 1])
+    with col_btn:
+        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; width: 100%;}</style>""", unsafe_allow_html=True)
+        st.download_button("📥 Descargar Ficha Técnica (PDF/HTML)", data=html_report, file_name=f"Ficha_{localidad}.html", mime="text/html")
     
-    with col1:
-        # Botón Verde (Primary)
-        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; border-color: #1E8449 !important; font-weight: bold !important; width: 100%;}</style>""", unsafe_allow_html=True)
-        st.download_button(
-            label="📥 Descargar Ficha Técnica (PDF/HTML)",
-            data=html_report,
-            file_name=f"Ficha_{localidad}.html",
-            mime="text/html"
-        )
-        
-    with col2:
+    with col_reset:
         if st.button("🔄 Nuevo Análisis"):
-            # Limpieza de sesión
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.session_state.step = 1 # Volver al inicio real
+            for key in list(st.session_state.keys()): del st.session_state[key]
+            st.session_state.step = 1
             st.rerun()
