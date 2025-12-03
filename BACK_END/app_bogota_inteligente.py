@@ -648,57 +648,7 @@ elif st.session_state.step == 5:
     else:
         st.warning("Sin datos residenciales.")
 
-    # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (LÓGICA BLINDADA + VISUALIZACIÓN DE PRUEBA.PY)
-    # -------------------------------------------------------------------------
-    st.markdown("---")
-    st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
-    st.markdown("Vocación normativa proyectada sobre cada manzana del sector.")
-
-    # 1. Copia de seguridad
-    manzanas_final = manzanas_zona.copy()
-    clasificacion_exitosa = False
-
-    if not manzanas_final.empty and not areas_pot.empty:
-        try:
-            # --- PARTE A: ALINEACIÓN DE COORDENADAS (CRÍTICO) ---
-            # Si las áreas no están en el mismo sistema que las manzanas, las convertimos
-            if areas_pot.crs != manzanas_final.crs:
-                areas_pot = areas_pot.to_crs(manzanas_final.crs)
-
-            # Reparación de geometrías
-            areas_pot['geometry'] = areas_pot.geometry.buffer(0)
-
-            # --- PARTE B: CRUCE ESPACIAL ---
-            # Calculamos centroides temporales para mayor precisión
-            puntos_temp = manzanas_final.copy()
-            # Truco: Proyectar a metros (3116) para hallar el centroide real, luego volver al original
-            puntos_temp['geometry'] = puntos_temp.to_crs(epsg=3116).centroid.to_crs(manzanas_final.crs)
-            
-            # Spatial Join (Left Join para no perder manzanas)
-            cruce = gpd.sjoin(
-                puntos_temp, 
-                areas_pot[['uso_pot_simplificado', 'geometry']], 
-                how='left', 
-                predicate='within' 
-            )
-            
-            # Eliminar duplicados (si un punto cae en borde de dos áreas)
-            cruce = cruce[~cruce.index.duplicated(keep='first')]
-            
-            # Asignar resultados a la tabla final
-            manzanas_final['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
-            
-            # Rellenar nulos
-            manzanas_final['uso_pot_simplificado'] = manzanas_final['uso_pot_simplificado'].fillna('Sin Clasificación')
-            
-            clasificacion_exitosa = True
-            
-        except Exception as e:
-            st.error(f"Error técnico en cruce espacial: {str(e)}")
-            manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
-    else:
-        manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
+    
 
     # -------------------------------------------------------------------------
     # SECCIÓN 4: POT (CORRECCIÓN DE CRUCE + DIAGNÓSTICO)
