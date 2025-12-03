@@ -967,8 +967,8 @@ if st.session_state.step == 5:
             html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
     
 
-    ruta_logo = base64.b64encode(img_bytes).decode('utf-8')
-    html_logo = f'<img src="data:image/png;base64,{ruta_logo}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
+    ruta_logo2 = base64.b64encode(ruta_logo).decode('utf-8')
+    html_logo = f'<img src="data:image/png;base64,{ruta_logo2}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
     # --- 4. PLANTILLA HTML (TEXTOS Y TABLAS) ---
     html_report = f"""
     <!DOCTYPE html>
