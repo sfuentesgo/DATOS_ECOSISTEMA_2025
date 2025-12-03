@@ -17,7 +17,7 @@ A diferencia de los visores tradicionales, esta herramienta no solo muestra mapa
 - 🚇 Conectividad y transporte.
 - 🏫 Cobertura educativa.
 - 🛡️ Perfil de seguridad.
-- 💰 Valoración del suelo y proyección financiera.
+
 
 El resultado final es una **Ficha Técnica Ejecutiva (HTML)** descargable, lista para la toma de decisiones.
 
@@ -29,7 +29,7 @@ El resultado final es una **Ficha Técnica Ejecutiva (HTML)** descargable, lista
 2.  **🔄 Cruce Espacial (Spatial Join):** Algoritmo en tiempo real que integra la capa de Manzanas Catastrales con las Áreas de Actividad del POT para determinar la normativa exacta.
 3.  **📊 Cálculo de KPIs:** Indicadores automáticos de cobertura (ej. % de estaciones de TM cercanas vs. total localidad).
 4.  **📑 Generador de Reportes:** Motor de renderizado que captura "fotos" de los mapas y gráficas para generar un informe HTML autocontenido (sin dependencias externas) y profesional.
-5.  **📈 Modelo Predictivo (Básico):** Proyección simplificada de valorización del m² basada en histórico y rentabilidad.
+
 
 ---
 
