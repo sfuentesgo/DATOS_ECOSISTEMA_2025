@@ -1,3 +1,4 @@
+# importacion de librerias necesarioas
 import streamlit as st
 import geopandas as gpd
 import folium
@@ -8,21 +9,21 @@ import plotly.graph_objects as go
 import pandas as pd
 import os
 
-# --- Configuración de la Página (Estilo Ciudadano) ---
+# Configuración de la Página
 st.set_page_config(
     page_title="Bogotá a un Clic",
-    page_icon="💛",
+    page_icon="💛", 
     layout="wide",
-    initial_sidebar_state="collapsed" # Menú colapsado para más limpieza
+    initial_sidebar_state="collapsed"
 )
 
-# --- INICIO: MOSTRAR LOGO EN CABECERA ---
+# INICIO: MOSTRAR LOGO EN CABECERA
 ruta_logo = "BACK_END/logo.png"
 
-# Usamos columnas para centrarlo o ajustarlo
+# columnas para centrarlo o ajustarlo
 col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
 
-with col_logo2: # Usamos la columna del medio para centrar
+with col_logo2:
     if os.path.exists(ruta_logo):
         
         st.image(ruta_logo, width=350, caption="Datos al Ecosistema 2025")
@@ -31,10 +32,10 @@ with col_logo2: # Usamos la columna del medio para centrar
         st.title("🏙️ Bogotá Inteligente")
         st.warning(f"Nota: No se encontró el logo en '{ruta_logo}'")
 
-st.markdown("---") # Una línea separadora elegante
+st.markdown("---")
 
-# --- Inyección de Estilos (CSS) - Paleta Bogotá ---
-# Esto le da el toque visual único con los colores de la ciudad
+# Inyección de Estilos
+
 st.markdown("""
     <style>
         /* Títulos en Rojo Bogotá */
@@ -55,11 +56,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Encabezado y Bienvenida ---
+# Encabezado y Bienvenida 
 st.title("Bogotá Visible: Tu Barrio en Datos 🏙️")
-st.subheader("Toma decisiones inteligentes sobre dónde vivir o invertir.")
+st.subheader("Toma decisiones inteligentes sobre el territorio de tu ciudad.")
 
-# Texto introductorio amigable
+# Texto introductorio
 st.markdown("""
 <div class="intro-box">
     ¿Alguna vez te has preguntado qué tan seguro es realmente un barrio, qué colegios tiene cerca o qué se puede construir allí?<br><br>
@@ -67,9 +68,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.write("") # Espacio vacío
+st.write("")
 
-# Explicación de valor con iconos sencillos
+# Explicación de valor con iconos
 col_info1, col_info2, col_info3, col_info4 = st.columns(4)
 
 with col_info1:
@@ -91,7 +92,7 @@ with col_info4:
 st.markdown("---")
 
 
-# --- Función de Carga de Datos (Conectada a DATOS_LIMPIOS) ---
+# Función de Carga de Datos (Conectada a DATOS_LIMPIOS)
 @st.cache_data
 def cargar_datasets():
     """
@@ -136,13 +137,13 @@ def cargar_datasets():
         
     return dataframes
 
-# --- Inicialización del Estado ---
+# Inicialización del Estado
 if "step" not in st.session_state:
     st.session_state.step = 1
 
-# ==============================================================================
+
 # PASO 1: SINCRONIZACIÓN Y CARGA DE DATOS
-# ==============================================================================
+
 if st.session_state.step == 1:
     st.markdown("### 🔌 Conectando con tu Ciudad")
     
@@ -155,7 +156,7 @@ if st.session_state.step == 1:
     * 🚌 **Infraestructura:** Red oficial de Transmilenio y Educación.
     """)
 
-    # --- CSS PARA BOTÓN VERDE (Personalizado para esta sección) ---
+    # CSS PARA BOTÓN VERDE
     st.markdown("""
         <style>
         /* Forzamos el estilo del botón solo para que sea Verde Éxito */
@@ -174,22 +175,22 @@ if st.session_state.step == 1:
         </style>
     """, unsafe_allow_html=True)
 
-    # Usamos spinner: Es invisible, solo muestra un relojito y desaparece al terminar
+    # Usamos spinner
     with st.spinner("⏳ Sincronizando mapas y estadísticas oficiales... por favor espera."):
         try:
-            # Ejecutamos la carga (Si ya está en caché, es instantáneo)
+            # Ejecutamos la carga
             dataframes = cargar_datasets()
             
             if dataframes:
                 # Guardamos en memoria silenciosamente
                 st.session_state.update(dataframes)
                 
-                # Mensaje de éxito limpio
+                # Mensaje de  limpio
                 st.success("✅ **¡Conexión Exitosa!** Todos los datos de Bogotá están listos para tu análisis.")
                 
                 st.markdown("---")
                 
-                # Botón de acción centrado (Ahora será VERDE gracias al CSS de arriba)
+                # Botón de acción centrado 
                 col_izq, col_centro, col_der = st.columns([1, 2, 1])
                 with col_centro:
                     if st.button("📍 Comenzar a Explorar", use_container_width=True):
@@ -201,11 +202,11 @@ if st.session_state.step == 1:
         except Exception as e:
             st.error(f"Ocurrió un error técnico: {e}")
 
-# ==============================================================================
+
 # PASO 2: SELECCIÓN DE LOCALIDAD (EXPERIENCIA MEJORADA)
-# ==============================================================================
+
 elif st.session_state.step == 2:
-    # --- INYECCIÓN CSS CORREGIDA ---
+    # CSS PERSONALIZADO PARA BOTONES
     st.markdown("""
         <style>
         /* 1. Estilo para el botón PRINCIPAL (Verde - Confirmar) */
@@ -258,16 +259,16 @@ elif st.session_state.step == 2:
         """)
         
         st.markdown("---")
-        # Botón de regreso (Gris - Secondary)
+        # Botón de regreso
         if st.button("⬅ Volver al Inicio", type="secondary", use_container_width=True):
             st.session_state.step = 1
             st.rerun()
 
     with col_mapa:
-        # Colores Identidad Bogotá
-        COLOR_BASE = "#776314"     # Amarillo suave
-        COLOR_LINEA = "#1B0BA8"    # Gris
-        COLOR_HOVER = "#AA1A0F"    # Rojo Bogotá
+        # Colores Identidad 
+        COLOR_BASE = "#776314"     # Amarillo
+        COLOR_LINEA = "#1B0BA8"    # Azul
+        COLOR_HOVER = "#AA1A0F"    # Rojo 
 
         localidades = st.session_state.localidades
         centro_urbano = [4.6097, -74.0817] 
@@ -303,7 +304,7 @@ elif st.session_state.step == 2:
 
         output = st_folium(m, width=None, height=550, returned_objects=["last_clicked"])
 
-    # --- Lógica de Selección y Ranking ---
+    # Lógica de Selección y Ranking
     clicked = output.get("last_clicked")
     contenedor_resultado = st.container()
 
@@ -332,7 +333,7 @@ elif st.session_state.step == 2:
                     st.caption("Has seleccionado esta zona.")
                 
                 with col_res2:
-                    # PROCESAMIENTO VISUAL DEL RANKING (LISTA LIMPIA)
+                    
                     st.markdown("**🚨 Top 3 Riesgos de Seguridad:**")
                     
                     if "," in perfil_seguridad:
@@ -352,15 +353,15 @@ elif st.session_state.step == 2:
                 with col_res3:
                     st.write("") 
                     st.write("") 
-                    # Botón Verde Amigable (Primary)
+                    
                     if st.button("🔍 Analizar esta Zona", type="primary", use_container_width=True):
                         st.session_state.localidad_sel = seleccion
                         st.session_state.step = 3
                         st.rerun()
 
-# ==============================================================================
-# PASO 3: DEFINICIÓN DEL ENTORNO (UBICACIÓN + RADIO) - FLUJO UNIFICADO
-# ==============================================================================
+
+# PASO 3: DEFINICIÓN DEL ENTORNO DE ANÁLISIS
+
 elif st.session_state.step == 3:
     st.header("📍 Paso 3: Define tu Entorno de Análisis")
 
@@ -375,13 +376,13 @@ elif st.session_state.step == 3:
         </style>
     """, unsafe_allow_html=True)
 
-    # ---------------------------------------------------------
+    
     # 1. BARRA LATERAL DE CONTROLES
-    # ---------------------------------------------------------
+    
     col_controles, col_mapa = st.columns([1, 2])
 
     with col_controles:
-        # Contexto reforzado
+        
         st.markdown(f"### 1. Ubicación en {st.session_state.localidad_sel}")
         st.info("Haz clic en el mapa para marcar el punto exacto.")
         
@@ -406,22 +407,22 @@ elif st.session_state.step == 3:
             
         st.caption(f"{desc_radio}")
 
-    # ---------------------------------------------------------
-    # 2. MAPA INTERACTIVO (LÓGICA DE CENTRADO DINÁMICO)
-    # ---------------------------------------------------------
+    
+    # 2. MAPA INTERACTIVO  CENTRADO DINÁMICO
+    
     with col_mapa:
         localidades = st.session_state.localidades
         localidad_geo = localidades[localidades["nombre_localidad"] == st.session_state.localidad_sel]
         
         bounds = localidad_geo.total_bounds
         
-        # --- CORRECCIÓN: LÓGICA DE CENTRO Y ZOOM ---
+        
         if "punto_lat" in st.session_state:
-            # Si hay pin, centramos en el pin y hacemos ZOOM IN (15)
+            # Si hay pin, centramos en el pin y hacemos ZOOM IN 
             centro_mapa = [st.session_state.punto_lat, st.session_state.punto_lon]
             zoom_inicial = 15
         else:
-            # Si no hay pin, centramos en la localidad con ZOOM OUT (13)
+            # Si no hay pin, centramos en la localidad con ZOOM OUT 
             centro_mapa = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
             zoom_inicial = 13
 
@@ -464,9 +465,9 @@ elif st.session_state.step == 3:
 
         mapa_output = st_folium(m, width=None, height=500, returned_objects=["last_clicked"])
 
-    # ---------------------------------------------------------
+    
     # 3. LÓGICA Y BOTONES
-    # ---------------------------------------------------------
+    
     
     clicked = mapa_output.get("last_clicked")
     if clicked and "lat" in clicked and "lng" in clicked:
@@ -475,7 +476,7 @@ elif st.session_state.step == 3:
         if localidad_geo.geometry.iloc[0].contains(punto_temp):
             st.session_state.punto_lat = clicked["lat"]
             st.session_state.punto_lon = clicked["lng"]
-            st.rerun() # Esto recargará el mapa centrado en el nuevo punto
+            st.rerun() 
         else:
             st.toast("⚠️ El punto está fuera de la localidad. Intenta más adentro.", icon="🚫")
 
@@ -484,7 +485,7 @@ elif st.session_state.step == 3:
     col_atras, col_accion = st.columns([1, 4])
     
     with col_atras:
-        # --- CORRECCIÓN: LIMPIEZA AL VOLVER ---
+        
         if st.button("⬅ Atrás"):
             # Borramos el punto para que si vuelve a entrar, el mapa esté limpio
             for key in ['punto_lat', 'punto_lon']:
@@ -501,9 +502,9 @@ elif st.session_state.step == 3:
             st.info("👈 Por favor, haz clic en el mapa para continuar.")
 
 
-# ==============================================================================
+
 # PASO 5: RESULTADOS DEL ANÁLISIS (DASHBOARD FINAL)
-# ==============================================================================
+
 elif st.session_state.step == 5:
     st.header("📊 Resultados de tu Análisis")
 
@@ -512,35 +513,35 @@ elif st.session_state.step == 5:
     📍 **Punto exacto:** En la localidad de **{st.session_state.localidad_sel}**.
     """)
 
-    # -------------------------------------------------------------------------
+    
     # 1. MOTOR DE CÁLCULO ESPACIAL
-    # -------------------------------------------------------------------------
+    
     localidades = st.session_state.localidades
     manzanas    = st.session_state.manzanas
     transporte  = st.session_state.transporte
     colegios    = st.session_state.colegios
     areas_pot   = st.session_state.areas
 
-    # 1.1 Buffer Geodésico (El molde del análisis)
+    # 1.1 Buffer de Análisis
     punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
     gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
     gdf_buffer = gdf_punto.to_crs(epsg=3116).buffer(st.session_state.radio_analisis).to_crs(epsg=4326)
     area_interes = gdf_buffer.iloc[0]
 
-    # 1.2 Asegurar Proyecciones (Para que todo coincida)
+    # 1.2 Asegurar Proyecciones Idénticas
     if transporte.crs != "EPSG:4326": transporte = transporte.to_crs("EPSG:4326")
     if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
 
-    # 1.3 Cruces Espaciales (Filtrar lo que hay dentro del círculo)
+    # 1.3 Cruces Espaciales 
     transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
     colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
     manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
 
-    # -------------------------------------------------------------------------
+    
     # SECCIÓN 1: MOVILIDAD
-    # -------------------------------------------------------------------------
+   
     st.markdown("---")
     st.markdown("### 🚌 1. ¿Qué tan fácil es moverse?")
     st.markdown("Analizamos qué opciones de transporte público (Transmilenio y SITP) tienes 'a la mano'.")
@@ -587,9 +588,9 @@ elif st.session_state.step == 5:
         else:
             st.error("❌ **Zona Apartada:**\nDependerás de vehículo particular o caminatas largas.")
 
-    # -------------------------------------------------------------------------
+    
     # SECCIÓN 2: EDUCACIÓN
-    # -------------------------------------------------------------------------
+    
     st.markdown("---")
     st.markdown("### 🏫 2. ¿Dónde pueden estudiar tus hijos?")
     st.markdown("Ubicación de colegios oficiales y privados en el vecindario.")
@@ -636,9 +637,9 @@ elif st.session_state.step == 5:
             st.caption("Por tipo:")
             st.dataframe(colegios_zona['sector'].value_counts(), use_container_width=True)
 
-    # -------------------------------------------------------------------------
+    
     # SECCIÓN 3: ESTRATIFICACIÓN
-    # -------------------------------------------------------------------------
+    
     st.markdown("---")
     st.markdown("### 🏘️ 3. ¿Cómo es el vecindario? (Estratos)")
     st.markdown("Nivel socioeconómico predominante en las manzanas del sector.")
@@ -668,9 +669,9 @@ elif st.session_state.step == 5:
 
     
 
-    # -------------------------------------------------------------------------
-    # SECCIÓN 4: POT (CORRECCIÓN DE CRUCE + DIAGNÓSTICO)
-    # -------------------------------------------------------------------------
+    
+    # SECCIÓN 4: POT 
+    
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
     st.markdown("Vocación normativa proyectada sobre cada manzana del sector.")
@@ -679,33 +680,33 @@ elif st.session_state.step == 5:
     manzanas_final = manzanas_zona.copy()
     clasificacion_exitosa = False
 
-    # --- DIAGNÓSTICO RÁPIDO (Solo para ver si hay datos cargados) ---
+    # Solo para ver si hay datos cargados
     # st.write(f"Cantidad de áreas POT cargadas: {len(areas_pot)}")
     # st.write(f"CRS Manzanas: {manzanas_final.crs}")
     # st.write(f"CRS Áreas POT: {areas_pot.crs}")
 
     if not manzanas_final.empty and not areas_pot.empty:
         try:
-            # A. Asegurar CRS idéntico
+            # Asegurar CRS idéntico
             if areas_pot.crs != manzanas_final.crs:
                 areas_pot = areas_pot.to_crs(manzanas_final.crs)
 
-            # B. Reparar geometrías inválidas (clave para evitar fallos silenciosos)
+            # Reparar geometrías inválidas 
             areas_pot['geometry'] = areas_pot.geometry.buffer(0)
             manzanas_final['geometry'] = manzanas_final.geometry.buffer(0)
 
-            # C. CRUCE ESPACIAL (LA CORRECCIÓN ESTÁ AQUÍ)
-            # En lugar de usar centroides + within, usamos intersects directo.
+            # CRUCE ESPACIAL
+            
             # Esto atrapa la manzana si aunque sea un pedacito toca el área del POT.
             cruce = gpd.sjoin(
                 manzanas_final,  # Usamos el polígono completo, no el centroide
                 areas_pot[['uso_pot_simplificado', 'geometry']], 
                 how='left', 
-                predicate='intersects' # CAMBIO CLAVE: 'within' era muy estricto
+                predicate='intersects' 
             )
             
-            # D. Limpieza de duplicados
-            # Al usar intersects, una manzana puede tocar 2 zonas. Nos quedamos con la que tenga mayor área de contacto
+            # Limpieza de duplicados
+            
             # (Simplificación: nos quedamos con la primera que encuentre para no complicar el código)
             cruce = cruce[~cruce.index.duplicated(keep='first')]
             
@@ -726,9 +727,9 @@ elif st.session_state.step == 5:
         st.warning("No hay datos de POT cargados o manzanas seleccionadas.")
         manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
 
-    # -------------------------------------------------------------------------
+    
     # VISUALIZACIÓN
-    # -------------------------------------------------------------------------
+    
     col_mapa_pot, col_data_pot = st.columns([2, 1])
     
     with col_mapa_pot:
@@ -736,7 +737,7 @@ elif st.session_state.step == 5:
         cats = manzanas_final["uso_pot_simplificado"].unique().tolist()
         palette = px.colors.qualitative.Bold # Usamos colores fuertes
         
-        # Mapa de colores seguro
+        
         color_map = {}
         for i, cat in enumerate(cats):
             if cat == "Sin Clasificación":
@@ -801,9 +802,9 @@ elif st.session_state.step == 5:
             if st.checkbox("Ver datos crudos del POT"):
                 st.write(areas_pot.head())
 
-    # -------------------------------------------------------------------------
-    # CIERRE: SEGURIDAD Y HTML
-    # -------------------------------------------------------------------------
+    
+    # SEGURIDAD 
+    
     st.markdown("---")
     st.markdown("### 🛡️ Contexto de Seguridad")
     
@@ -825,9 +826,9 @@ elif st.session_state.step == 5:
         {texto_seg}
     </div>
     """, unsafe_allow_html=True)
-# ==============================================================================
+
 # PASO 5: REPORTE EJECUTIVO (VERSIÓN FINAL - MAPA DETALLADO Y TEXTOS)
-# ==============================================================================
+
 if st.session_state.step == 5: 
     import base64
     import plotly.graph_objects as go
@@ -836,15 +837,15 @@ if st.session_state.step == 5:
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # --- 1. RECUPERACIÓN Y PROCESAMIENTO DE DATOS ---
+    # RECUPERACIÓN Y PROCESAMIENTO DE DATOS
     
-    # A. Recuperar Dataframe de Manzanas (para POT y Estrato)
+    # Recuperar Dataframe de Manzanas
     # Intentamos recuperar la variable ya procesada. Si no existe, usamos la zona base.
     if 'manzanas_final' in locals() and not manzanas_final.empty:
         df_reporte = manzanas_final.copy()
     else:
         df_reporte = manzanas_zona.copy()
-        # Fallback: Cruce rápido con POT si la columna no existe
+        # Cruce con POT si la columna no existe
         if not areas_pot.empty and 'uso_pot_simplificado' not in df_reporte.columns:
             try:
                 if areas_pot.crs != df_reporte.crs:
@@ -855,7 +856,7 @@ if st.session_state.step == 5:
             except:
                 pass 
 
-    # B. Calcular KPIs (Los 5 puntos clave)
+    # Calcular KPIs (Los 5 puntos clave)
     
     # 1. Transporte (Cantidad)
     num_tm = len(transporte_zona)
@@ -882,7 +883,7 @@ if st.session_state.step == 5:
     datos_loc = localidades[localidades['nombre_localidad'] == localidad].iloc[0]
     seguridad_texto = datos_loc.get('top_3_delitos', 'No disponible')
     
-    # Formatear seguridad en lista vertical HTML
+    # Formatear seguridad en lista vertical
     if "," in seguridad_texto:
         items_seg = seguridad_texto.split(",")
         lista_seguridad_html = "<ul style='margin-top:5px; margin-bottom:5px;'>"
@@ -896,21 +897,21 @@ if st.session_state.step == 5:
     radio = st.session_state.radio_analisis
     lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
 
-    # --- 2. ALGORITMO DE SCORING (VIABILIDAD) ---
+    # ALGORITMO DE SCORING VIABILIDAD
     score = 0
     if num_tm >= 2: score += 1
     if num_col >= 1: score += 1
     if uso_moda != "Sin Clasificación": score += 1
     
     dictamen = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" # Verde, Naranja, Rojo
+    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" #
 
-    # --- 3. GENERACIÓN DE IMAGEN (MAPA CON PINES) ---
+    # GENERACIÓN DE IMAGEN
     with st.spinner("Generando mapa detallado con estaciones y colegios..."):
         try:
             fig_mapa = go.Figure()
 
-            # A. Radio de Influencia (Fondo Azul Tenue)
+            # Radio de Influencia
             if 'area_interes' in locals():
                 lats_poly = list(area_interes.exterior.xy[1])
                 lons_poly = list(area_interes.exterior.xy[0])
@@ -922,7 +923,7 @@ if st.session_state.step == 5:
                     name='Zona'
                 ))
 
-            # B. Estaciones de Transmilenio (ROJO)
+            # Estaciones de Transmilenio
             if not transporte_zona.empty:
                 fig_mapa.add_trace(go.Scattermapbox(
                     lat=transporte_zona.geometry.y,
@@ -932,7 +933,7 @@ if st.session_state.step == 5:
                     name='Estaciones'
                 ))
 
-            # C. Colegios (MORADO)
+            # Colegios
             if not colegios_zona.empty:
                 fig_mapa.add_trace(go.Scattermapbox(
                     lat=colegios_zona.geometry.y,
@@ -942,7 +943,7 @@ if st.session_state.step == 5:
                     name='Colegios'
                 ))
 
-            # D. El PIN del Usuario (Negro para destacar)
+            # El PIN del Usuario
             fig_mapa.add_trace(go.Scattermapbox(
                 lat=[lat], lon=[lon],
                 mode='markers',
@@ -958,7 +959,7 @@ if st.session_state.step == 5:
                 showlegend=False
             )
             
-            # Exportar a Base64
+            # Exportar a Base64 para poder incrustar en HTML
             img_bytes = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
             b64_mapa = base64.b64encode(img_bytes).decode('utf-8')
             html_mapa = f'<img src="data:image/png;base64,{b64_mapa}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
@@ -968,7 +969,7 @@ if st.session_state.step == 5:
     
 
     
-    # --- 4. PLANTILLA HTML (TEXTOS Y TABLAS) ---
+    # PLANTILLA HTML (TEXTOS Y TABLAS) lo que el usuario se lleva
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -1048,7 +1049,7 @@ if st.session_state.step == 5:
     </html>
     """
 
-    # --- 5. ZONA DE DESCARGA Y REINICIO ---
+    # ZONA DE DESCARGA Y REINICIO
     col1, col2 = st.columns([2, 1])
     
     with col1:
