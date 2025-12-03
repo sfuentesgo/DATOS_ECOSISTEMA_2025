@@ -15,6 +15,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed" # Menú colapsado para más limpieza
 )
 
+# --- INICIO: MOSTRAR LOGO EN CABECERA ---
+ruta_logo = "BACK_END/logo.png"
+
+# Usamos columnas para centrarlo o ajustarlo
+col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
+
+with col_logo2: # Usamos la columna del medio para centrar
+    if os.path.exists(ruta_logo):
+        
+        st.image(ruta_logo, width=350, caption="Datos al Ecosistema 2025")
+    else:
+        # Fallback por si la imagen no carga
+        st.title("🏙️ Bogotá Inteligente")
+        st.warning(f"Nota: No se encontró el logo en '{ruta_logo}'")
+
+st.markdown("---") # Una línea separadora elegante
+
 # --- Inyección de Estilos (CSS) - Paleta Bogotá ---
 # Esto le da el toque visual único con los colores de la ciudad
 st.markdown("""
