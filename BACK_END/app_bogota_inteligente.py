@@ -990,7 +990,7 @@ if st.session_state.step == 5:
                     <th>ESTACIONES TM (Rojo)</th>
                     <th>COLEGIOS (Morado)</th>
                     <th>ESTRATO MODA</th>
-                    <th>NORMATIVA POT</th>
+                    <th>DOMINIO DE POT</th>
                 </tr>
                 <tr>
                     <td>{num_tm}</td>
