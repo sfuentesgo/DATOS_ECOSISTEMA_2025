@@ -992,7 +992,7 @@ if st.session_state.step == 5:
     </head>
     <body>
         <div class="header">
-            <img src="{html_logo}">
+            {html_logo}
             <h1 style="margin:0;">Ficha de Inteligencia Territorial</h1>
             <p style="margin:5px 0 0;">Bogotá D.C. | Localidad {localidad}</p>
         </div>
