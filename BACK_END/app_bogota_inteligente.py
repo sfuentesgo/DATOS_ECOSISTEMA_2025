@@ -655,6 +655,7 @@ elif st.session_state.step == 5:
     # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("### 🏗️ 4. ¿Qué se permite construir? (POT)")
+    st.markdown("Vocación normativa proyectada sobre cada manzana del sector.")
 
     # 1. Copia de seguridad
     manzanas_final = manzanas_zona.copy()
