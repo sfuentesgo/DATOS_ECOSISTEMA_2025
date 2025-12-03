@@ -6,6 +6,7 @@ from shapely.geometry import Point
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
+import os
 
 # --- Configuración de la Página (Estilo Ciudadano) ---
 st.set_page_config(
