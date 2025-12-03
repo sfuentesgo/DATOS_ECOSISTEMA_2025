@@ -53,7 +53,7 @@ Sigue estos pasos para correr el proyecto en tu máquina local:
 
 ### 1. Clonar el repositorio
 ```bash
-git clone [https://github.com/tu-usuario/bogota-inteligente.git](https://github.com/tu-usuario/bogota-inteligente.git)
+git clone https://github.com/andres-fuentex/CONCURSO
 cd bogota-inteligente
 
 ### 2. Entorno virtual recomendado
