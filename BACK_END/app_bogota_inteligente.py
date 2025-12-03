@@ -807,9 +807,9 @@ elif st.session_state.step == 5:
         {texto_seg}
     </div>
     """, unsafe_allow_html=True)
-# -------------------------------------------------------------------------
-# 5. REPORTE HTML (FINAL: MAPA LIMPIO + DATOS CORRECTOS)
-# -------------------------------------------------------------------------
+# ==============================================================================
+# PASO 5: REPORTE EJECUTIVO (FINAL BLINDADO CON ESTRATO)
+# ==============================================================================
 if st.session_state.step == 5: 
     import base64
     import plotly.graph_objects as go
@@ -818,72 +818,89 @@ if st.session_state.step == 5:
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # --- 1. RECUPERACIÓN DE DATOS (Usando la lógica de Sección 4) ---
-    # Intentamos recuperar la variable calculada en el paso anterior
-    # Si no existe (porque recargó la página), la recalculamos IGUAL que en Sección 4
+    # --- 1. RECUPERACIÓN Y PROCESAMIENTO DE DATOS ---
+    
+    # A. Recuperar GeoDataFrame base (Manzanas)
+    # Intentamos usar la variable procesada en el paso anterior. Si no existe, la regeneramos.
     if 'manzanas_final' in locals() and not manzanas_final.empty:
         df_reporte = manzanas_final.copy()
     else:
-        # Recálculo de emergencia (Blindaje)
+        # Fallback: Usamos la zona recortada y cruzamos con POT si es necesario
         df_reporte = manzanas_zona.copy()
         if not areas_pot.empty:
             try:
+                # Asegurar CRS
                 if areas_pot.crs != df_reporte.crs:
                     areas_pot = areas_pot.to_crs(df_reporte.crs)
                 
-                # Mismo cruce que Sección 4
+                # Cruce espacial (Spatial Join)
                 cruce = gpd.sjoin(df_reporte, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='intersects')
                 cruce = cruce[~cruce.index.duplicated(keep='first')]
                 df_reporte['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
             except:
-                pass
+                pass # Si falla, se manejará como "Sin Clasificación" abajo
     
-    # Asegurar que la columna existe
+    # B. Calcular KPIs (Los 5 puntos clave)
+    
+    # 1. Transporte
+    num_tm = len(transporte_zona)
+    
+    # 2. Educación
+    num_col = len(colegios_zona)
+    
+    # 3. Normativa (POT) - Moda
     if 'uso_pot_simplificado' not in df_reporte.columns:
         df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
-    
-    # Calcular Moda (Dato clave para el reporte)
     uso_moda = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()[0]
+    
+    # 4. Estratificación - Moda (NUEVO)
+    try:
+        if 'estrato' in df_reporte.columns:
+            estrato_moda = int(df_reporte['estrato'].mode()[0])
+        else:
+            estrato_moda = "N/A"
+    except:
+        estrato_moda = "N/A"
 
-    # Otros KPIs
-    num_tm = len(transporte_zona)
-    num_col = len(colegios_zona)
+    # 5. Seguridad
     localidad = st.session_state.localidad_sel
-    radio = st.session_state.radio_analisis
-    lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
-
-    # Datos de seguridad
     datos_loc = localidades[localidades['nombre_localidad'] == localidad].iloc[0]
     seguridad_texto = datos_loc.get('top_3_delitos', 'No disponible')
 
-    # Scoring
+    # C. Variables de Contexto
+    radio = st.session_state.radio_analisis
+    lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
+
+    # --- 2. ALGORITMO DE SCORING (VIABILIDAD) ---
     score = 0
+    # Criterio 1: Conectividad Robusta
     if num_tm >= 2: score += 1
+    # Criterio 2: Cobertura Servicios
     if num_col >= 1: score += 1
+    # Criterio 3: Certeza Normativa
     if uso_moda != "Sin Clasificación": score += 1
     
     dictamen = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B"
+    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" # Verde, Naranja, Rojo
 
-    # --- 2. GENERACIÓN DEL MAPA LIMPIO (Solo Pin + Radio) ---
+    # --- 3. GENERACIÓN DE IMAGEN (MAPA LIMPIO) ---
     with st.spinner("Generando mapa de ubicación..."):
         try:
-            # Mapa base vacío (sin pintar manzanas)
             fig_mapa = go.Figure()
 
-            # 1. Dibujar el Radio de Influencia (Círculo azul transparente)
+            # Dibujar el Radio (Círculo azul)
             if 'area_interes' in locals():
                 lats_poly = list(area_interes.exterior.xy[1])
                 lons_poly = list(area_interes.exterior.xy[0])
                 fig_mapa.add_trace(go.Scattermapbox(
                     lat=lats_poly, lon=lons_poly,
                     mode='lines', fill='toself',
-                    fillcolor='rgba(52, 152, 219, 0.2)', # Azul suave
+                    fillcolor='rgba(52, 152, 219, 0.2)',
                     line=dict(color='#3498DB', width=2),
                     name='Radio Análisis'
                 ))
 
-            # 2. El PIN Rojo (Ubicación exacta)
+            # Dibujar el PIN (Usuario)
             fig_mapa.add_trace(go.Scattermapbox(
                 lat=[lat], lon=[lon],
                 mode='markers',
@@ -891,7 +908,6 @@ if st.session_state.step == 5:
                 name='Punto Interés'
             ))
 
-            # Configuración de cámara y estilo
             fig_mapa.update_layout(
                 mapbox_style="carto-positron",
                 mapbox_zoom=14.5,
@@ -900,7 +916,7 @@ if st.session_state.step == 5:
                 showlegend=False
             )
             
-            # Convertir a Base64
+            # Exportar a Base64
             img_bytes = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
             b64_mapa = base64.b64encode(img_bytes).decode('utf-8')
             html_mapa = f'<img src="data:image/png;base64,{b64_mapa}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
@@ -908,7 +924,7 @@ if st.session_state.step == 5:
         except Exception as e:
             html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
 
-    # --- 3. PLANTILLA HTML (Ficha Técnica) ---
+    # --- 4. PLANTILLA HTML (FICHA TÉCNICA COMPLETA) ---
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -920,10 +936,12 @@ if st.session_state.step == 5:
             .card {{ border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
             .kpi-container {{ display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }}
             .kpi-box {{ flex: 1; background: #F8F9F9; padding: 15px; text-align: center; border-radius: 8px; border-top: 4px solid #2980B9; }}
-            .kpi-val {{ font-size: 22px; font-weight: bold; color: #2C3E50; display: block; }}
+            .kpi-val {{ font-size: 20px; font-weight: bold; color: #2C3E50; display: block; }}
             .kpi-label {{ font-size: 11px; color: #777; text-transform: uppercase; margin-top: 5px; display:block; }}
             .dictamen {{ margin-top: 20px; padding: 15px; background: {color_fondo}; color: white; text-align: center; font-size: 20px; font-weight: bold; border-radius: 8px; }}
             .security-box {{ margin-top: 15px; padding: 15px; background: #FDEDEC; border-left: 5px solid #C0392B; color: #922B21; font-size: 14px; }}
+            .meta-info {{ font-size: 14px; color: #555; margin-bottom: 15px; }}
+            .highlight {{ background-color: #F1C40F; padding: 2px 5px; border-radius: 3px; font-weight: bold; color: black; }}
         </style>
     </head>
     <body>
@@ -933,8 +951,12 @@ if st.session_state.step == 5:
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 Ubicación y Entorno</h3>
-            <p style="font-size:14px; color:#555;">Coordenadas: {lat:.5f}, {lon:.5f} | Radio: {radio}m</p>
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 1. Ubicación y Entorno</h3>
+            
+            <div class="meta-info">
+                Coordenadas: {lat:.5f}, {lon:.5f} | Radio: {radio}m <br>
+                <span style="margin-top:5px; display:inline-block;">Nivel Socioeconómico Predominante: <span class="highlight">Estrato {estrato_moda}</span></span>
+            </div>
             
             {html_mapa}
             
@@ -948,14 +970,14 @@ if st.session_state.step == 5:
                     <span class="kpi-label">Colegios</span>
                 </div>
                 <div class="kpi-box">
-                    <span class="kpi-val" style="font-size:14px; line-height: 1.2; padding-top:5px;">{uso_moda}</span>
+                    <span class="kpi-val" style="font-size:13px; line-height: 1.2; padding-top:5px;">{uso_moda}</span>
                     <span class="kpi-label">Normativa POT</span>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ Contexto de Seguridad</h3>
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ 2. Contexto de Seguridad</h3>
             <div class="security-box">
                 <strong>🚨 Top 3 Incidentes en la zona:</strong><br>
                 {seguridad_texto}
@@ -963,20 +985,21 @@ if st.session_state.step == 5:
         </div>
 
         <div class="dictamen">
-            DICTAMEN: {dictamen}
+            DICTAMEN TÉCNICO: {dictamen}
         </div>
         
         <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
-            Reporte generado automáticamente el 28/11/2025
+            Reporte generado automáticamente el 28/11/2025 por Bogotá Inteligente
         </div>
     </body>
     </html>
     """
 
-    # --- 4. BOTONES ---
+    # --- 5. ZONA DE DESCARGA Y REINICIO ---
     col1, col2 = st.columns([2, 1])
     
     with col1:
+        # Botón Verde (Primary)
         st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; border-color: #1E8449 !important; font-weight: bold !important; width: 100%;}</style>""", unsafe_allow_html=True)
         st.download_button(
             label="📥 Descargar Ficha Técnica (PDF/HTML)",
@@ -987,6 +1010,8 @@ if st.session_state.step == 5:
         
     with col2:
         if st.button("🔄 Nuevo Análisis"):
+            # Limpieza de sesión
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
+            st.session_state.step = 1 # Volver al inicio real
             st.rerun()
