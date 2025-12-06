@@ -71,7 +71,7 @@ st.markdown("""
 st.write("")
 
 # Explicación de valor con iconos
-col_info1, col_info2, col_info3, col_info4 = st.columns(4)
+col_info1, col_info2, col_info3, col_info4, col_info5,  col_info6 = st.columns(6)
 
 with col_info1:
     st.markdown("### 👮 Seguridad")
@@ -89,6 +89,14 @@ with col_info4:
     st.markdown("### 🏫 Educación")
     st.error("Para las familias: encuentra la oferta de **Colegios Oficiales y Privados** en el sector.")
 
+with col_info5:
+    st.markdown("### 🩺 Salud")
+    st.info("Prioriza el cuidado. Ubica la red de **Hospitales y Clínicas (IPS)** disponibles.")
+
+with col_info6:
+    st.markdown("### 🌳 Zonas Verdes")
+    st.success("Respira mejor. Encuentra las **Zonas Verdes** ideales para el deporte, el descanso o pasear a tu mascota.")
+
 st.markdown("---")
 
 
@@ -96,19 +104,19 @@ st.markdown("---")
 @st.cache_data
 def cargar_datasets():
     """
-    Descarga, valida y cachea los datasets geoespaciales desde el repositorio del proyecto.
-    Retorna un diccionario con los GeoDataFrames normalizados (EPSG:4326).
+    Descarga, valida y cachea los datasets geoespaciales.
+    Forzamos la corrección de coordenadas para Verde y Salud.
     """
-    # Repositorio oficial de datos procesados
     BASE_URL = "https://github.com/andres-fuentex/CONCURSO/raw/main/DATOS_LIMPIOS/"
     
-    # Mapeo de archivos según la arquitectura de datos definida
     archivos = {
-        "localidades": "dim_localidad.geojson", # mapa de localidades y contexto de seguridad basado en DAI
-        "areas":       "dim_area.geojson",     # Usos del suelo POT
-        "manzanas":    "tabla_hechos.geojson", # Estratificación
-        "transporte":  "dim_transporte.geojson", # datos de estaciones de transmilenio
-        "colegios":    "dim_colegios.geojson" # datos secretaria de educacion colegios en bogota
+        "localidades": "dim_localidad.geojson",
+        "areas":       "dim_area.geojson",
+        "manzanas":    "tabla_hechos.geojson",
+        "transporte":  "dim_transporte.geojson",
+        "colegios":    "dim_colegios.geojson",
+        "salud":       "dim_salud.geojson", 
+        "verde":       "dim_verde.geojson"
     }
     
     dataframes = {}
@@ -117,18 +125,37 @@ def cargar_datasets():
     for nombre_clave, nombre_archivo in archivos.items():
         try:
             url_completa = f"{BASE_URL}{nombre_archivo}"
-            
-            # Lectura directa
             gdf = gpd.read_file(url_completa)
             
+            # --- CURACIÓN ESPECÍFICA DE COORDENADAS ---
             
-            if gdf.crs.to_string() != "EPSG:4326":
-                gdf = gdf.to_crs("EPSG:4326")
+            # CASO 1: PARQUES (dim_verde)
+            # Vienen en planas (91130...), hay que decirles que son Bogotá (3116) y pasar a GPS (4326)
+            if nombre_clave == "verde":
+                if gdf.crs is None:
+                    gdf.set_crs(epsg=3116, inplace=True) # Asumimos Magna Bogotá
+                gdf = gdf.to_crs(epsg=4326) # Convertimos a GPS
+            
+            # CASO 2: SALUD (dim_salud)
+            # Vienen en GPS (-74...), pero a veces sin etiqueta. Aseguramos que sea 4326.
+            elif nombre_clave == "salud":
+                if gdf.crs is None:
+                    gdf.set_crs(epsg=4326, inplace=True)
+                else:
+                    gdf = gdf.to_crs(epsg=4326)
+
+            # CASO 3: EL RESTO
+            # Verificación estándar
+            else:
+                if gdf.crs is None:
+                    gdf.set_crs(epsg=4326, inplace=True)
+                elif gdf.crs.to_string() != "EPSG:4326":
+                    gdf = gdf.to_crs("EPSG:4326")
                 
             dataframes[nombre_clave] = gdf
             
         except Exception as e:
-            errores.append(f"Error cargando capa {nombre_clave}: {str(e)}")
+            errores.append(f"Error cargando {nombre_clave}: {str(e)}")
     
     if errores:
         for err in errores:
@@ -154,6 +181,7 @@ if st.session_state.step == 1:
     * 🛡️ **Seguridad:** Datos directos de la Secretaría de Seguridad.
     * 🗺️ **Normativa:** Reglas de juego del POT (Decreto 555).
     * 🚌 **Infraestructura:** Red oficial de Transmilenio y Educación.
+    * 🌳 **Calidad de vida:** acceso a servicios de salud y zonas verdes.
     """)
 
     # CSS PARA BOTÓN VERDE
@@ -522,6 +550,10 @@ elif st.session_state.step == 5:
     colegios    = st.session_state.colegios
     areas_pot   = st.session_state.areas
 
+    # nuevos 
+    salud = st.session_state.salud
+    verde = st.session_state.verde
+
     # 1.1 Buffer de Análisis
     punto_ref = Point(st.session_state.punto_lon, st.session_state.punto_lat)
     gdf_punto = gpd.GeoDataFrame([{'geometry': punto_ref}], crs="EPSG:4326")
@@ -533,13 +565,22 @@ elif st.session_state.step == 5:
     if colegios.crs != "EPSG:4326": colegios = colegios.to_crs("EPSG:4326")
     if manzanas.crs != "EPSG:4326": manzanas = manzanas.to_crs("EPSG:4326")
     if areas_pot.crs != "EPSG:4326": areas_pot = areas_pot.to_crs("EPSG:4326")
+    if salud.crs != "EPSG:4326": salud = salud.to_crs("EPSG:4326")
+    if verde.crs != "EPSG:4326": verde = verde.to_crs("EPSG:4326")
+
+    
 
     # 1.3 Cruces Espaciales 
     transporte_zona = transporte[transporte.geometry.intersects(area_interes)]
     colegios_zona = colegios[colegios.geometry.intersects(area_interes)]
     manzanas_zona = manzanas[manzanas.geometry.intersects(area_interes)]
-
+    # nuevos
+    salud_zona = salud[salud.geometry.intersects(area_interes)]
+    parques_zona = verde[verde.geometry.intersects(area_interes)]
     
+    cant_salud = len(salud_zona)
+    cant_parques = len(parques_zona)
+
     # SECCIÓN 1: MOVILIDAD
    
     st.markdown("---")
@@ -587,6 +628,8 @@ elif st.session_state.step == 5:
             st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
         else:
             st.error("❌ **Zona Apartada:**\nDependerás de vehículo particular o caminatas largas.")
+
+    
 
     
     # SECCIÓN 2: EDUCACIÓN
@@ -637,7 +680,130 @@ elif st.session_state.step == 5:
             st.caption("Por tipo:")
             st.dataframe(colegios_zona['sector'].value_counts(), use_container_width=True)
 
-    
+    # --- SECCIÓN SALUD ---
+    st.markdown("---")
+    st.markdown("### 🩺 5. Salud y Bienestar")
+    st.markdown("Identificamos la oferta de servicios médicos (IPS, Hospitales, Clínicas) en tu radio cercano.")
+
+    col_mapa_salud, col_data_salud = st.columns([2, 1])
+
+    with col_mapa_salud:
+        fig_s = go.Figure()
+        
+        # 1. Zona (Círculo Naranja)
+        fig_s.add_trace(go.Scattermapbox(
+            lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(255, 165, 0, 0.1)', line=dict(color='orange', width=2)
+        ))
+        
+        # 2. Hospitales (Puntos)
+        if not salud_zona.empty:
+            fig_s.add_trace(go.Scattermapbox(
+                lat=salud_zona.geometry.y, lon=salud_zona.geometry.x,
+                mode='markers', name='Salud',
+                # Usamos símbolo de cruz y color Rojo
+                marker=dict(size=12, color="#0905F7", symbol='circle'),
+                # Ajusta 'nombre_hospital' si tu columna se llama diferente
+                text=salud_zona.get('nombre_hospital', 'Centro de Salud'), 
+                hoverinfo='text'
+            ))
+            
+        # 3. Tú (Punto Azul)
+        fig_s.add_trace(go.Scattermapbox(
+            lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
+            mode='markers', name='Tú', marker=dict(size=12, color='#3498DB')
+        ))
+        
+        # Configuración igual a Movilidad
+        fig_s.update_layout(
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_zoom=14, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True,
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(fig_s, use_container_width=True, key="mapa_salud_unico")
+
+    with col_data_salud:
+        cant_s = len(salud_zona)
+        st.metric("Centros de Salud", cant_s)
+        
+        if cant_s > 1:
+            st.success("✅ **Zona Cubierta:**\nAcceso rápido a atención médica.")
+        elif cant_s == 1:
+            st.warning("⚠️ **Cobertura Básica:**\nTienes un centro de salud cerca.")
+        else:
+            st.error("❌ **Sin Cobertura Inmediata:**\nNo hay hospitales en este radio exacto.")
+
+    # --- SECCIÓN PARQUES (POLÍGONOS) ---
+    st.markdown("---")
+    st.markdown("### 🌳 6. Espacio Público y Verde")
+    st.markdown("Zonas de recreación, deporte y descanso al aire libre.")
+
+    col_mapa_ver, col_data_ver = st.columns([2, 1])
+
+    with col_mapa_ver:
+        fig_v = go.Figure()
+        
+        # 1. Zona de Análisis (Círculo Naranja)
+        fig_v.add_trace(go.Scattermapbox(
+            lat=list(area_interes.exterior.xy[1]), lon=list(area_interes.exterior.xy[0]),
+            mode='lines', fill='toself', name='Zona analizada',
+            fillcolor='rgba(255, 165, 0, 0.05)', # Muy transparente
+            line=dict(color='orange', width=2)
+        ))
+        
+        # 2. PARQUES (POLÍGONOS REALES)
+        if not parques_zona.empty:
+            # Importamos json aquí por si acaso
+            import json
+            # Convertimos las geometrías a GeoJSON para pintarlas
+            geojson_parques = json.loads(parques_zona.to_json())
+            
+            # Usamos Choroplethmapbox para pintar el relleno verde
+            fig_v.add_trace(go.Choroplethmapbox(
+                geojson=geojson_parques,
+                locations=parques_zona.index, # ID de enlace
+                z=[1] * len(parques_zona),    # Valor dummy para color uniforme
+                colorscale=[[0, '#27AE60'], [1, '#27AE60']], # Verde 'Jardín'
+                showscale=False,              # Sin barra de colores
+                marker_opacity=0.7,
+                marker_line_width=1,
+                marker_line_color='white',
+                name='Zonas Verdes',
+                # Texto al pasar el mouse
+                text=parques_zona.get('nombre_parque', 'Parque / Zona Verde'),
+                hoverinfo='text'
+            ))
+            
+        # 3. Tú 
+        fig_v.add_trace(go.Scattermapbox(
+            lat=[st.session_state.punto_lat], lon=[st.session_state.punto_lon],
+            mode='markers', name='Tú', marker=dict(size=14, color='#2980B9', symbol='circle')
+        ))
+        
+        fig_v.update_layout(
+            mapbox_style="carto-positron", 
+            mapbox_center={"lat": st.session_state.punto_lat, "lon": st.session_state.punto_lon},
+            mapbox_zoom=14.5, margin={"r":0,"t":0,"l":0,"b":0}, height=350, showlegend=True,
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(fig_v, use_container_width=True, key="mapa_parques_poligonos")
+
+    with col_data_ver:
+        cant_p = len(parques_zona)
+        st.metric("Parques Cercanos", cant_p)
+        
+        
+        if cant_p > 4:
+            st.success("✅ **¡Entorno Privilegiado!**\nTienes múltiples opciones para salir a correr, pasear a tu mascota o desconectarte del ruido.")
+        elif cant_p > 0:
+            st.info("🏃 **Vida Activa:**\nTienes espacios verdes a la mano para tu rutina diaria de ejercicio o descanso.")
+        else:
+            st.error("🏢 **Entorno 100% Urbano:**\nEstás en una zona densa. Tendrás que desplazarte un poco para encontrar zonas verdes amplias.")
+
+
+
     # SECCIÓN 3: ESTRATIFICACIÓN
     
     st.markdown("---")
@@ -727,7 +893,7 @@ elif st.session_state.step == 5:
         st.warning("No hay datos de POT cargados o manzanas seleccionadas.")
         manzanas_final['uso_pot_simplificado'] = 'Sin Clasificación'
 
-    
+      
     # VISUALIZACIÓN
     
     col_mapa_pot, col_data_pot = st.columns([2, 1])
@@ -803,6 +969,8 @@ elif st.session_state.step == 5:
                 st.write(areas_pot.head())
 
     
+
+    
     # SEGURIDAD 
     
     st.markdown("---")
@@ -840,7 +1008,6 @@ if st.session_state.step == 5:
     # RECUPERACIÓN Y PROCESAMIENTO DE DATOS
     
     # Recuperar Dataframe de Manzanas
-    # Intentamos recuperar la variable ya procesada. Si no existe, usamos la zona base.
     if 'manzanas_final' in locals() and not manzanas_final.empty:
         df_reporte = manzanas_final.copy()
     else:
@@ -857,12 +1024,11 @@ if st.session_state.step == 5:
                 pass 
 
     # Calcular KPIs (Los 5 puntos clave)
-    
-    # 1. Transporte (Cantidad)
     num_tm = len(transporte_zona)
-    
-    # 2. Educación (Cantidad)
     num_col = len(colegios_zona)
+    # --- NUEVOS KPIs ---
+    num_salud = len(salud_zona)
+    num_parques = len(parques_zona)
     
     # 3. Normativa (POT) - Moda
     if 'uso_pot_simplificado' not in df_reporte.columns:
@@ -897,17 +1063,27 @@ if st.session_state.step == 5:
     radio = st.session_state.radio_analisis
     lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
 
-    # ALGORITMO DE SCORING VIABILIDAD
+    # ALGORITMO DE SCORING VIABILIDAD (ACTUALIZADO 5 PUNTOS)
     score = 0
-    if num_tm >= 2: score += 1
-    if num_col >= 1: score += 1
-    if uso_moda != "Sin Clasificación": score += 1
+    if num_tm >= 2: score += 1      # Transporte
+    if num_col >= 1: score += 1     # Educación
+    if uso_moda != "Sin Clasificación": score += 1 # Normativa
+    if num_parques >= 1: score += 1 # Parques (NUEVO)
+    if num_salud >= 1: score += 1   # Salud (NUEVO)
     
-    dictamen = "VIABILIDAD ALTA" if score == 3 else "VIABILIDAD MEDIA" if score == 2 else "VIABILIDAD RESTRINGIDA"
-    color_fondo = "#27AE60" if score == 3 else "#F39C12" if score == 2 else "#C0392B" #
+    # Recalibración del dictamen
+    if score >= 4:
+        dictamen = "VIABILIDAD ALTA ⭐⭐⭐"
+        color_fondo = "#27AE60"
+    elif score >= 2:
+        dictamen = "VIABILIDAD MEDIA ⭐⭐"
+        color_fondo = "#F39C12"
+    else:
+        dictamen = "VIABILIDAD RESTRINGIDA ⭐"
+        color_fondo = "#C0392B"
 
-    # GENERACIÓN DE IMAGEN
-    with st.spinner("Generando mapa detallado con estaciones y colegios..."):
+    # GENERACIÓN DE IMAGEN ESTÁTICA PARA EL REPORTE
+    with st.spinner("Generando mapa detallado con estaciones, colegios y bienestar..."):
         try:
             fig_mapa = go.Figure()
 
@@ -929,7 +1105,7 @@ if st.session_state.step == 5:
                     lat=transporte_zona.geometry.y,
                     lon=transporte_zona.geometry.x,
                     mode='markers',
-                    marker=dict(size=8, color='#E74C3C'), # Rojo
+                    marker=dict(size=6, color='#E74C3C'), # Rojo
                     name='Estaciones'
                 ))
 
@@ -939,15 +1115,36 @@ if st.session_state.step == 5:
                     lat=colegios_zona.geometry.y,
                     lon=colegios_zona.geometry.x,
                     mode='markers',
-                    marker=dict(size=8, color='#8E44AD'), # Morado
+                    marker=dict(size=6, color="#9625C7"), # Morado
                     name='Colegios'
+                ))
+
+            # --- NUEVO: SALUD ---
+            if not salud_zona.empty:
+                fig_mapa.add_trace(go.Scattermapbox(
+                    lat=salud_zona.geometry.y,
+                    lon=salud_zona.geometry.x,
+                    mode='markers',
+                    marker=dict(size=6, color="#3A07F3", symbol='circle'), 
+                    name='Salud'
+                ))
+
+            # --- NUEVO: PARQUES (Puntos centroides para la imagen estática) ---
+            if not parques_zona.empty:
+                centros = parques_zona.geometry.centroid
+                fig_mapa.add_trace(go.Scattermapbox(
+                    lat=centros.y,
+                    lon=centros.x,
+                    mode='markers',
+                    marker=dict(size=6, color="#178B27", symbol='circle'), 
+                    name='Parques'
                 ))
 
             # El PIN del Usuario
             fig_mapa.add_trace(go.Scattermapbox(
                 lat=[lat], lon=[lon],
                 mode='markers',
-                marker=dict(size=15, color='black', symbol='marker'),
+                marker=dict(size=12, color='black', symbol='circle'),
                 name='Ubicación'
             ))
 
@@ -967,9 +1164,17 @@ if st.session_state.step == 5:
         except Exception as e:
             html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
     
+    # Generar marca de tiempo con Zona Horaria de Colombia
+    from datetime import datetime
+    import pytz # Librería para zonas horarias
 
+    zona_bogota = pytz.timezone('America/Bogota')
     
-    # PLANTILLA HTML (TEXTOS Y TABLAS) lo que el usuario se lleva
+    ahora_bogota = datetime.now(zona_bogota)
+    
+    fecha_reporte = ahora_bogota.strftime("%d/%m/%Y %I:%M %p") 
+
+    # PLANTILLA HTML MEJORADA CON LEYENDA DE COLORES
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -983,16 +1188,25 @@ if st.session_state.step == 5:
             
             /* Estilo Tabla KPI */
             .kpi-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-            .kpi-table th {{ background-color: #F4F6F7; padding: 10px; text-align: center; border: 1px solid #ddd; font-size: 12px; color: #777; }}
-            .kpi-table td {{ padding: 15px; text-align: center; border: 1px solid #ddd; font-size: 18px; font-weight: bold; color: #2C3E50; }}
+            .kpi-table th {{ background-color: #F4F6F7; padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 11px; color: #555; vertical-align: middle; }}
+            .kpi-table td {{ padding: 10px; text-align: center; border: 1px solid #ddd; font-size: 16px; font-weight: bold; color: #2C3E50; }}
             
+            /* Círculos de Colores (Leyenda) */
+            .dot {{
+                height: 10px;
+                width: 10px;
+                border-radius: 50%;
+                display: inline-block;
+                margin-right: 5px;
+                border: 1px solid #ccc;
+            }}
+
             .dictamen-box {{ margin-top: 20px; padding: 20px; background: {color_fondo}; color: white; text-align: center; border-radius: 8px; }}
             .security-box {{ margin-top: 10px; padding: 15px; background: #FDEDEC; border-left: 5px solid #C0392B; color: #922B21; }}
         </style>
     </head>
     <body>
         <div class="header">
-            
             <h1 style="margin:0;">Ficha de Inteligencia Territorial</h1>
             <p style="margin:5px 0 0;">Bogotá D.C. | Localidad {localidad}</p>
         </div>
@@ -1002,53 +1216,56 @@ if st.session_state.step == 5:
             
             <p class="intro-text">
                 Una vez evaluada la zona seleccionada en las coordenadas ({lat:.4f}, {lon:.4f}) con un radio de {radio} metros, 
-                es importante determinar los factores de infraestructura y normativa detallados en las ayudas siguientes:
+                es importante determinar los factores de infraestructura, bienestar y normativa detallados:
             </p>
             
             {html_mapa}
             
             <table class="kpi-table">
                 <tr>
-                    <th>ESTACIONES TM (Rojo)</th>
-                    <th>COLEGIOS (Morado)</th>
-                    <th>ESTRATO MODA</th>
-                    <th>DOMINIO DE POT</th>
+                    <th><span class="dot" style="background-color: #E74C3C;"></span>TRANSMILENIO</th>
+                    <th><span class="dot" style="background-color: #9625C7;"></span>COLEGIOS</th>
+                    <th><span class="dot" style="background-color: #178B27;"></span>PARQUES</th>
+                    <th><span class="dot" style="background-color: #3A07F3;"></span>SALUD</th>
+                    <th>MODA ESTRATO</th>
+                    <th>MODA USO POT</th>
                 </tr>
                 <tr>
                     <td>{num_tm}</td>
                     <td>{num_col}</td>
+                    <td>{num_parques}</td>
+                    <td>{num_salud}</td>
                     <td>{estrato_moda}</td>
-                    <td style="font-size:14px;">{uso_moda}</td>
+                    <td style="font-size:12px;">{uso_moda}</td>
                 </tr>
             </table>
         </div>
 
         <div class="card">
             <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ Contexto de Seguridad</h3>
-            
             <p class="intro-text">
                 A nivel de la localidad de {localidad}, es prudente destacar que el entorno de seguridad se caracteriza 
                 por la prevalencia de los siguientes incidentes de alto impacto:
             </p>
-            
             <div class="security-box">
                 {lista_seguridad_html}
             </div>
         </div>
 
         <div class="dictamen-box">
-            <p style="margin:0; font-size:14px; opacity:0.9;">DICTAMEN TÉCNICO</p>
+            <p style="margin:0; font-size:14px; opacity:0.9;">DICTAMEN TÉCNICO MULTIDIMENSIONAL</p>
             <h2 style="margin:5px 0 0; font-size:24px;">{dictamen}</h2>
-            <p style="margin-top:10px; font-size:12px;">De acuerdo con el análisis algorítmico de puntuación aditiva.</p>
+            <p style="margin-top:10px; font-size:12px;">Basado en 5 factores: Movilidad, Educación, Salud, Espacio Público y Normativa.</p>
         </div>
         
         <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
-            Reporte generado automáticamente el 28/11/2025
+            Reporte generado automáticamente con Datos Abiertos de Bogotá | {fecha_reporte}
         </div>
     </body>
     </html>
     """
 
+   
     # ZONA DE DESCARGA Y REINICIO
     col1, col2 = st.columns([2, 1])
     
