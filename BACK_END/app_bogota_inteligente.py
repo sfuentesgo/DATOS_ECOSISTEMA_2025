@@ -11,7 +11,7 @@ import os
 
 # Configuración de la Página
 st.set_page_config(
-    page_title="Bogotá a un Clic",
+    page_title="Bogotá Inteligente",
     page_icon="💛", 
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -57,7 +57,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Encabezado y Bienvenida 
-st.title("Bogotá Visible: Tu Barrio en Datos 🏙️")
+st.title("Bogotá Inteligente: Tu Barrio en Datos 🏙️")
 st.subheader("Toma decisiones inteligentes sobre el territorio de tu ciudad.")
 
 # Texto introductorio
