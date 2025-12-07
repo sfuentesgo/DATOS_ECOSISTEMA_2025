@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Bogotá Visible — Gemelo Digital 3D</title>
+
+    <!-- CesiumJS (solo el engine, sin estilos propios aún) -->
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Cesium.js"></script>
+
+    <!-- Archivo CSS (lo crearás luego como style.css) -->
+    <link rel="stylesheet" href="style.css">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+
+    <!-- Barra superior -->
+    <header id="topbar">
+        <img id="logo" src="../BACK_END/logo.png" alt="Logo" onerror="this.style.display='none'">
+        <div>
+            <h1 id="title">Bogotá Visible — Gemelo Digital 3D</h1>
+            <p id="subtitle">Representación tridimensional del análisis territorial</p>
+        </div>
+    </header>
+
+    <!-- Layout principal -->
+    <div id="layout">
+
+        <!-- Contenedor del visor 3D -->
+        <div id="viewerContainer">
+            <div id="cesiumContainer"></div>
+        </div>
+
+        <!-- Panel lateral -->
+        <aside id="sidebar">
+
+            <!-- Sección de información general -->
+            <section class="panel-section">
+                <h2>Información del Punto Analizado</h2>
+                <div id="info-coords"></div>
+                <div id="info-radio"></div>
+            </section>
+
+            <section class="panel-section">
+                <h2>Capas del Territorio</h2>
+
+                <div class="layer-row">
+                    <span>Límites de Localidades</span>
+                    <input type="checkbox" id="layer-localidad" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Estaciones de Transporte</span>
+                    <input type="checkbox" id="layer-transporte" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Colegios</span>
+                    <input type="checkbox" id="layer-colegios" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Hospitales</span>
+                    <input type="checkbox" id="layer-salud" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Zonas Verdes</span>
+                    <input type="checkbox" id="layer-verde" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Manzanas (extrusión por estrato)</span>
+                    <input type="checkbox" id="layer-manzanas" checked>
+                </div>
+
+                <div class="layer-row">
+                    <span>Límites POT</span>
+                    <input type="checkbox" id="layer-pot" checked>
+                </div>
+            </section>
+
+            <!-- Sección de radio -->
+            <section class="panel-section">
+                <h2>Radio Analizado</h2>
+                <input id="input-radio" type="number" min="50" step="50">
+                <button id="btn-aplicar-radio">Aplicar</button>
+            </section>
+
+            <!-- Sección de convenciones -->
+            <section class="panel-section">
+                <h2>Convenciones</h2>
+                <ul class="legend">
+
+                    <li><span class="legend-color" style="background:#0047FF;"></span> Límites de localidad (polígonos azules)</li>
+
+                    <li><span class="legend-color" style="background:#FF0000;"></span> Estaciones de transporte (puntos rojos)</li>
+
+                    <li><span class="legend-color" style="background:#9B59B6;"></span> Colegios (puntos morados)</li>
+
+                    <li><span class="legend-color" style="background:#0905F7;"></span> Hospitales (puntos azul oscuro)</li>
+
+                    <li><span class="legend-color" style="background:#27AE60;"></span> Parques y zonas verdes (polígonos verdes)</li>
+
+                    <li><span class="legend-color" style="background:#F1C40F;"></span> Manzanas (altura proporcional al estrato)</li>
+
+                    <li><span class="legend-color" style="border:2px solid #E67E22; background:transparent;"></span> Límites POT (solo borde)</li>
+
+                </ul>
+            </section>
+
+            <!-- Botón abrir en nueva pestaña -->
+            <section class="panel-section">
+                <a id="btn-open-new" href="#" target="_blank">Abrir vista en nueva pestaña</a>
+            </section>
+
+        </aside>
+
+    </div>
+
+    <!-- Archivo JS que generaremos luego -->
+    <script src="main.js"></script>
+</body>
+</html>

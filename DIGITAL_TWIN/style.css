@@ -1,0 +1,221 @@
+/* ---------------------------------------------------
+   ESTILO GENERAL
+--------------------------------------------------- */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: 'Helvetica', Arial, sans-serif;
+    color: #2C3E50;
+    background: #fafafa;
+}
+
+/* ---------------------------------------------------
+   TOPBAR
+--------------------------------------------------- */
+
+#topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    background: #2C3E50;
+    color: white;
+    border-bottom: 3px solid #DA291C;
+}
+
+#logo {
+    height: 48px;
+}
+
+#title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #F1C40F;
+}
+
+#subtitle {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+/* ---------------------------------------------------
+   LAYOUT
+--------------------------------------------------- */
+
+#layout {
+    display: flex;
+    width: 100%;
+    height: calc(100vh - 68px);
+}
+
+/* Visor Cesium */
+#viewerContainer {
+    flex: 1;
+    position: relative;
+}
+
+#cesiumContainer {
+    width: 100%;
+    height: 100%;
+}
+
+/* ---------------------------------------------------
+   SIDEBAR
+--------------------------------------------------- */
+
+#sidebar {
+    width: 340px;
+    background: #ffffff;
+    border-left: 1px solid #e6e6e6;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.panel-section {
+    margin-bottom: 24px;
+}
+
+.panel-section h2 {
+    font-size: 18px;
+    margin: 0 0 12px;
+    color: #DA291C;
+}
+
+/* ---------------------------------------------------
+   CAPAS / TOGGLES
+--------------------------------------------------- */
+
+.layer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 4px;
+    margin: 6px 0;
+    border-bottom: 1px dashed #ececec;
+    font-size: 14px;
+}
+
+/* ---------------------------------------------------
+   INPUTS
+--------------------------------------------------- */
+
+#input-radio {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #CCCCCC;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+#btn-aplicar-radio {
+    margin-top: 8px;
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: #27AE60;
+    color: white;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#btn-aplicar-radio:hover {
+    background: #1E8449;
+}
+
+/* ---------------------------------------------------
+   BOTÓN NUEVA PESTAÑA
+--------------------------------------------------- */
+
+#btn-open-new {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    width: 100%;
+    background: #2980B9;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 700;
+    margin-top: 12px;
+}
+
+#btn-open-new:hover {
+    background: #1F618D;
+}
+
+/* ---------------------------------------------------
+   CONVENCIONES
+--------------------------------------------------- */
+
+.legend {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 14px;
+}
+
+.legend-color {
+    display: inline-block;
+    width: 22px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid #888;
+}
+
+/* POT (solo borde) */
+.legend li .legend-color[style*="transparent"] {
+    border: 2px solid #E67E22 !important;
+}
+
+/* ---------------------------------------------------
+   SCROLLBAR MODERNO (solo panel)
+--------------------------------------------------- */
+
+#sidebar::-webkit-scrollbar {
+    width: 8px;
+}
+
+#sidebar::-webkit-scrollbar-thumb {
+    background: #CCCCCC;
+    border-radius: 4px;
+}
+
+#sidebar::-webkit-scrollbar-thumb:hover {
+    background: #BBBBBB;
+}
+
+/* ---------------------------------------------------
+   RESPONSIVE
+--------------------------------------------------- */
+
+@media (max-width: 900px) {
+    #sidebar {
+        width: 260px;
+    }
+}
+
+@media (max-width: 750px) {
+    #layout {
+        flex-direction: column;
+    }
+    #sidebar {
+        width: 100%;
+        height: 260px;
+        border-left: none;
+        border-top: 1px solid #e6e6e6;
+    }
+}
