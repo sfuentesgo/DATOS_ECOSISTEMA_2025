@@ -17,6 +17,8 @@ A diferencia de los visores tradicionales, esta herramienta no solo muestra mapa
 - 🚇 Conectividad y transporte.
 - 🏫 Cobertura educativa.
 - 🛡️ Perfil de seguridad.
+- 🌳 Equipamento de zonas verdes
+- 👨‍⚕️ Unidades medicas relacionadas en el sector
 
 
 El resultado final es una **Ficha Técnica Ejecutiva (HTML)** descargable, lista para la toma de decisiones.
@@ -46,6 +48,9 @@ Este proyecto integra y estandariza los siguientes conjuntos de datos del portal
 | **Delitos de Alto Impacto** | Secretaría de Seguridad | Contexto de seguridad y riesgos. |
 
 ---
+## 🔗 enlace directo a la aplicacion web
+
+https://bogota-inteligente.streamlit.app/
 
 ## 🛠️ Instalación y Uso Local
 
