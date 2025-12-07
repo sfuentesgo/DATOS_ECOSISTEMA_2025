@@ -37,23 +37,28 @@ document.getElementById("input-radio").value = radio;
 //---------------------------------------------------
 // INICIALIZAR VISOR
 //---------------------------------------------------
-const viewer = new Cesium.Viewer("cesiumContainer", {
-    terrainProvider: await Cesium.CesiumTerrainProvider.fromIonAssetId(1),
-    animation: false,
-    timeline: false,
-    baseLayerPicker: true,
-    sceneModePicker: true
-});
+async function initCesium() {
 
-// Convertir zoom a altura
-function zoomToHeight(z) {
-    return Math.max(150, 60000 / (z || 15));
+    // Token (puede ser anónimo si quieres usar el token por defecto de Cesium)
+    Cesium.Ion.defaultAccessToken = Cesium.Ion.defaultAccessToken;
+
+    // Terreno usando Ion Asset ID 1 (global terrain gratuito)
+    const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
+
+    // Crear el visor
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+        terrainProvider: terrainProvider,
+        animation: false,
+        timeline: false,
+        baseLayerPicker: true,
+        sceneModePicker: true
+    });
+
+    console.log("Cesium cargado correctamente!");
 }
 
-viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(lon, lat, zoomToHeight(zoom)),
-    duration: 1.5
-});
+// Ejecutar
+initCesium();
 
 //---------------------------------------------------
 // CARGA DE GEOJSON DESDE GITHUB RAW
