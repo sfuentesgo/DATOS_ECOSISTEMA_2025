@@ -38,7 +38,7 @@ document.getElementById("input-radio").value = radio;
 // INICIALIZAR VISOR
 //---------------------------------------------------
 const viewer = new Cesium.Viewer("cesiumContainer", {
-    terrainProvider: Cesium.createWorldTerrain(),
+    terrainProvider: await Cesium.CesiumTerrainProvider.fromIonAssetId(1),
     animation: false,
     timeline: false,
     baseLayerPicker: true,
