@@ -216,11 +216,11 @@
                 });
 
                 // CÁMARA
-                const altura = radio * 4.5; 
+                const altura = radio * 5.5; 
                 viewer.camera.flyTo({
                     destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.004, altura),
                     orientation: { heading: 0.0, pitch: Cesium.Math.toRadians(-35.0), roll: 0.0 },
-                    duration: 4
+                    duration: 4.5
                 });
 
             } catch (error) { alert("Error: " + error.message); }
