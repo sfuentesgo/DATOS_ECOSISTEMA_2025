@@ -1298,7 +1298,7 @@ if st.session_state.step == 5:
         
         
         # URL DE  GITHUB 
-        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/index.html" 
+        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO"
         
         # Construir Parámetros
         params_payload = {
