@@ -1270,37 +1270,68 @@ if st.session_state.step == 5:
     # ZONA DE DESCARGA Y ACCIONES
     st.markdown("---")
 
-    # Inyectamos CSS 
+    # --- CSS  PARA ALINEACIÓN  ---
     st.markdown("""
         <style>
-        /* 1. Estilo base para TODOS los botones en esta fila */
+        /* 1. Forzar altura y eliminar márgenes extraños en botones nativos de Streamlit */
         div.stButton > button, div.stDownloadButton > button {
-            height: 50px !important;  /* Altura fija para alineación perfecta */
-            width: 100% !important;   /* Ancho total de la columna */
+            height: 50px !important;
+            width: 100% !important;
             border-radius: 8px !important;
             font-weight: bold !important;
             border: none !important;
-            transition: all 0.3s ease !important;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
-            color: white !important; /* Texto blanco para todos */
+            color: white !important;
+            margin-top: 0px !important; /* Elimina espacio fantasma superior */
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
-        
-        /* 2. Efecto Hover general (se levantan un poquito) */
-        div.stButton > button:hover, div.stDownloadButton > button:hover {
+
+        /* 2. Efecto Hover para todos */
+        div.stButton > button:hover, div.stDownloadButton > button:hover, .custom-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
         }
+
+        /* 3. Colores específicos para los botones nativos */
+        /* Botón Descargar (Verde) */
+        div.stDownloadButton > button { background-color: #27AE60 !important; }
+        
+        /* Botón Reiniciar (Gris) */
+        div.stButton > button { background-color: #7F8C8D !important; }
+
+        /* 4. Clase para el botón HTML personalizado */
+        .custom-btn {
+            width: 100%;
+            height: 50px;
+            background-color: #2980B9;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none; /* Quita subrayado del link */
+        }
+        
+        /* Ajuste para quitar subrayado en el link contenedor */
+        a.custom-link { text-decoration: none !important; display: block; width: 100%; }
         </style>
     """, unsafe_allow_html=True)
 
-    # Distribución: 
-    col1, col2, col3 = st.columns([1, 1, 1.5]) 
+    # Distribución de columnas 
+    col1, col2, col3 = st.columns([1, 1, 1.5], gap="small") 
 
-    # 1. BOTÓN DESCARGAR
+    # 1. BOTÓN DESCARGAR (Verde)
     with col1:
-        
-        st.markdown("""<style>div.stDownloadButton > button { background-color: #27AE60 !important; }</style>""", unsafe_allow_html=True)
-        
         st.download_button(
             label="📥 Descargar Ficha",
             data=html_report,
@@ -1308,18 +1339,15 @@ if st.session_state.step == 5:
             mime="text/html"
         )
 
-    # 2. BOTÓN REINICIAR
+    # 2. BOTÓN REINICIAR (Gris)
     with col2:
-        
-        st.markdown("""<style>div.stButton > button { background-color: #7F8C8D !important; }</style>""", unsafe_allow_html=True)
-        
-        if st.button("🔄 Reiniciar"):
+        if st.button("🔄 Reiniciar", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.session_state.step = 1 
             st.rerun()
 
-    # 3. BOTÓN GEMELO DIGITAL
+    # 3. BOTÓN GEMELO DIGITAL (Azul)
     with col3:
         # URL DE GITHUB PAGES
         URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
@@ -1337,25 +1365,9 @@ if st.session_state.step == 5:
         
         
         st.markdown(f"""
-            <a href="{url_final}" target="_blank" style="text-decoration: none;">
-                <button style="
-                    width: 100%;
-                    height: 50px; /* Misma altura que los nativos */
-                    background-color: #2980B9; /* Azul Belice */
-                    color: white; 
-                    border: none; 
-                    border-radius: 8px; 
-                    font-weight: bold; 
-                    font-size: 16px; 
-                    cursor: pointer;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                    transition: all 0.3s ease;
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center;
-                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';" 
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.1)';">
+            <a href="{url_final}" target="_blank" class="custom-link">
+                <div class="custom-btn">
                     🚀 VER GEMELO DIGITAL
-                </button>
+                </div>
             </a>
         """, unsafe_allow_html=True)
