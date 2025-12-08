@@ -623,7 +623,7 @@ elif st.session_state.step == 5:
         cant_t = len(transporte_zona)
         st.metric("Puntos de Transporte", cant_t)
         
-        if cant_t > 5:
+        if cant_t > 3:
             st.success("✅ **Excelente Conectividad:**\nTienes muchas opciones de ruta cerca.")
         elif cant_t > 0:
             st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
