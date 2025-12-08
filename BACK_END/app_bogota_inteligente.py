@@ -1269,38 +1269,61 @@ if st.session_state.step == 5:
    
     # ZONA DE DESCARGA Y ACCIONES
     st.markdown("---")
-    
-    # CORRECCIÓN: Definimos 3 anchos para las 3 columnas
-    # [1, 1, 2] significa: Pequeña, Pequeña, Grande (para el botón del Gemelo)
-    col1, col2, col3 = st.columns([1, 1, 2])
-    
-    # 1. Botón Descargar Reporte
+
+    # Inyectamos CSS 
+    st.markdown("""
+        <style>
+        /* 1. Estilo base para TODOS los botones en esta fila */
+        div.stButton > button, div.stDownloadButton > button {
+            height: 50px !important;  /* Altura fija para alineación perfecta */
+            width: 100% !important;   /* Ancho total de la columna */
+            border-radius: 8px !important;
+            font-weight: bold !important;
+            border: none !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+            color: white !important; /* Texto blanco para todos */
+        }
+        
+        /* 2. Efecto Hover general (se levantan un poquito) */
+        div.stButton > button:hover, div.stDownloadButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Distribución: 
+    col1, col2, col3 = st.columns([1, 1, 1.5]) 
+
+    # 1. BOTÓN DESCARGAR
     with col1:
-        # Estilo para botón verde
-        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; width: 100%;}</style>""", unsafe_allow_html=True)
+        
+        st.markdown("""<style>div.stDownloadButton > button { background-color: #27AE60 !important; }</style>""", unsafe_allow_html=True)
+        
         st.download_button(
             label="📥 Descargar Ficha",
             data=html_report,
             file_name=f"Ficha_{localidad}.html",
             mime="text/html"
         )
-        
-    # 2. Botón Nuevo Análisis
+
+    # 2. BOTÓN REINICIAR
     with col2:
-        if st.button("🔄 Reiniciar", use_container_width=True):
+        
+        st.markdown("""<style>div.stButton > button { background-color: #7F8C8D !important; }</style>""", unsafe_allow_html=True)
+        
+        if st.button("🔄 Reiniciar"):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.session_state.step = 1 
             st.rerun()
 
-    # 3. Botón GEMELO DIGITAL (Cesium)
+    # 3. BOTÓN GEMELO DIGITAL
     with col3:
+        # URL DE GITHUB PAGES
+        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
         
-        
-        # URL DE  GITHUB 
-        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO"
-        
-        # Construir Parámetros
         params_payload = {
             "lat": st.session_state.punto_lat,
             "lon": st.session_state.punto_lon,
@@ -1312,23 +1335,27 @@ if st.session_state.step == 5:
         query_string = urllib.parse.urlencode(params_payload)
         url_final = f"{URL_BASE_CESIUM}?{query_string}"
         
-        # Botón HTML personalizado (Negro/Azul oscuro)
+        
         st.markdown(f"""
             <a href="{url_final}" target="_blank" style="text-decoration: none;">
                 <button style="
                     width: 100%;
-                    background-color: #2C3E50; 
+                    height: 50px; /* Misma altura que los nativos */
+                    background-color: #2980B9; /* Azul Belice */
                     color: white; 
                     border: none; 
-                    padding: 0.5rem 1rem; 
-                    font-size: 16px; 
-                    font-weight: bold; 
                     border-radius: 8px; 
+                    font-weight: bold; 
+                    font-size: 16px; 
                     cursor: pointer;
-                    line-height: 1.6;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                ">
-                    🚀 VER DIGITAL TWIN 
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    transition: all 0.3s ease;
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center;
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';" 
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.1)';">
+                    🚀 VER GEMELO DIGITAL
                 </button>
             </a>
         """, unsafe_allow_html=True)
