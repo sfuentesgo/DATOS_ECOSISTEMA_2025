@@ -3,8 +3,7 @@
 > **Herramienta de microanálisis urbano y Gemelo Digital para la toma de decisiones ciudadanas.**
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://bogota-inteligente.streamlit.app/)
-![Python](https://img.shields.io/badge/Python-3.9-blue)
-![Cesium](https://img.shields.io/badge/CesiumJS-3D-orange)
+
 
 ## 📖 Descripción del Proyecto
 
@@ -16,7 +15,7 @@ El proyecto conecta un **Dashboard Analítico** (Streamlit) con un **Gemelo Digi
 
 1.  **Microanálisis Territorial:** Selecciona cualquier punto de Bogotá y define un radio de influencia (300m - 2km).
 2.  **Multidimensionalidad:** Cruce de datos de:
-    * 🚌 Movilidad (Transmilenio/SITP)
+    * 🚌 Movilidad (Transmilenio)
     * 🏫 Educación (Colegios Oficiales y Privados)
     * 🏥 Salud (Red Adscrita)
     * 🌳 Espacio Público
