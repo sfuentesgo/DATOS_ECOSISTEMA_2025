@@ -1175,7 +1175,7 @@ if st.session_state.step == 5:
     
     fecha_reporte = ahora_bogota.strftime("%d/%m/%Y %I:%M %p") 
 
-    # PLANTILLA HTML MEJORADA CON LEYENDA DE COLORES
+    # PLANTILLA HTML 
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -1270,67 +1270,62 @@ if st.session_state.step == 5:
     # ZONA DE DESCARGA Y ACCIONES
     st.markdown("---")
 
-    # --- CSS  PARA ALINEACIÓN  ---
+    # --- CSS MAESTRO DE UNIFICACIÓN ---
     st.markdown("""
-        <style>
-        /* 1. Forzar altura y eliminar márgenes extraños en botones nativos de Streamlit */
-        div.stButton > button, div.stDownloadButton > button {
-            height: 50px !important;
-            width: 100% !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-            border: none !important;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
-            color: white !important;
-            margin-top: 0px !important; /* Elimina espacio fantasma superior */
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
+    <style>
+    /* 1. RESETEO UNIVERSAL para los 3 tipos de botones */
+    /* Atacamos los selectores exactos de Streamlit para Descarga, Botón Normal y LinkButton */
+    [data-testid="stDownloadButton"] button,
+    [data-testid="stButton"] button,
+    [data-testid="stLinkButton"] a {
+        height: 50px !important;  /* Altura idéntica forzada */
+        width: 100% !important;   /* Ancho completo */
+        border-radius: 8px !important;
+        font-weight: 800 !important; /* Fuente gruesa */
+        border: none !important;
+        display: flex !important;
+        align-items: center !important; /* Centrado Vertical perfecto */
+        justify-content: center !important; /* Centrado Horizontal perfecto */
+        transition: all 0.3s ease !important;
+        color: white !important;
+        margin: 0 !important;
+        text-decoration: none !important; /* Quitar subrayado al link */
+        padding: 0 !important; /* Eliminar paddings internos que descuadran */
+    }
 
-        /* 2. Efecto Hover para todos */
-        div.stButton > button:hover, div.stDownloadButton > button:hover, .custom-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-        }
+    /* 2. COLORES ESPECÍFICOS POR TIPO */
 
-        /* 3. Colores específicos para los botones nativos */
-        /* Botón Descargar (Verde) */
-        div.stDownloadButton > button { background-color: #27AE60 !important; }
-        
-        /* Botón Reiniciar (Gris) */
-        div.stButton > button { background-color: #7F8C8D !important; }
+    /* Botón Descargar (Verde) */
+    [data-testid="stDownloadButton"] button {
+        background-color: #27AE60 !important;
+    }
 
-        /* 4. Clase para el botón HTML personalizado */
-        .custom-btn {
-            width: 100%;
-            height: 50px;
-            background-color: #2980B9;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none; /* Quita subrayado del link */
-        }
-        
-        /* Ajuste para quitar subrayado en el link contenedor */
-        a.custom-link { text-decoration: none !important; display: block; width: 100%; }
-        </style>
+    /* Botón Reiniciar (Gris) */
+    [data-testid="stButton"] button {
+        background-color: #7F8C8D !important;
+    }
+
+    /* Botón Gemelo Digital (LinkButton - Azul) */
+    [data-testid="stLinkButton"] a {
+        background-color: #2980B9 !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Sombra suave */
+    }
+
+    /* 3. EFECTO HOVER (ELEVACIÓN) PARA TODOS */
+    [data-testid="stDownloadButton"] button:hover,
+    [data-testid="stButton"] button:hover,
+    [data-testid="stLinkButton"] a:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 10px rgba(0,0,0,0.3) !important;
+        color: white !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    # Distribución de columnas 
+    # Distribución de Columnas (Ajuste fino de anchos)
     col1, col2, col3 = st.columns([1, 1, 1.5], gap="small") 
 
-    # 1. BOTÓN DESCARGAR (Verde)
+    # 1. BOTÓN DESCARGAR (Nativo)
     with col1:
         st.download_button(
             label="📥 Descargar Ficha",
@@ -1339,7 +1334,7 @@ if st.session_state.step == 5:
             mime="text/html"
         )
 
-    # 2. BOTÓN REINICIAR (Gris)
+    # 2. BOTÓN REINICIAR (Nativo)
     with col2:
         if st.button("🔄 Reiniciar", use_container_width=True):
             for key in list(st.session_state.keys()):
@@ -1347,7 +1342,7 @@ if st.session_state.step == 5:
             st.session_state.step = 1 
             st.rerun()
 
-    # 3. BOTÓN GEMELO DIGITAL (Azul)
+    # 3. BOTÓN GEMELO DIGITAL (Nativo - LinkButton)
     with col3:
         # URL DE GITHUB PAGES
         URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
@@ -1363,11 +1358,10 @@ if st.session_state.step == 5:
         query_string = urllib.parse.urlencode(params_payload)
         url_final = f"{URL_BASE_CESIUM}?{query_string}"
         
-        
-        st.markdown(f"""
-            <a href="{url_final}" target="_blank" class="custom-link">
-                <div class="custom-btn">
-                    🚀 VER GEMELO DIGITAL
-                </div>
-            </a>
-        """, unsafe_allow_html=True)
+        # Usamos st.link_button en lugar de HTML sucio
+        # Esto garantiza que el botón sea idéntico a los otros dos
+        st.link_button(
+            label="🚀 VER GEMELO DIGITAL", 
+            url=url_final,
+            use_container_width=True
+        )
