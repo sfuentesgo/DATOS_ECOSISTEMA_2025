@@ -996,24 +996,41 @@ elif st.session_state.step == 5:
     </div>
     """, unsafe_allow_html=True)
 
-# PASO 5: REPORTE EJECUTIVO (VERSIÓN FINAL - MAPA DETALLADO Y TEXTOS)
+# PASO 5: REPORTE EJECUTIVO
 
 if st.session_state.step == 5: 
     import base64
-    import plotly.graph_objects as go
-    import geopandas as gpd
+    import urllib.parse # Asegúrate de tener esto importado
 
     st.markdown("---")
     st.header("📑 Informe Ejecutivo")
 
-    # RECUPERACIÓN Y PROCESAMIENTO DE DATOS
+    # ---------------------------------------------------------
+    # 1. PREPARACIÓN DE DATOS (URL DEL GEMELO DIGITAL)
+    # ---------------------------------------------------------
+    # Definimos la URL AQUÍ para usarla tanto en el reporte como en el botón de abajo
+    URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
     
-    # Recuperar Dataframe de Manzanas
+    params_payload = {
+        "lat": st.session_state.punto_lat,
+        "lon": st.session_state.punto_lon,
+        "radio": st.session_state.radio_analisis,
+        "loc": st.session_state.localidad_sel,
+        "altura": "900" 
+    }
+    
+    query_string = urllib.parse.urlencode(params_payload)
+    url_final = f"{URL_BASE_CESIUM}?{query_string}"
+
+    # ---------------------------------------------------------
+    # 2. PROCESAMIENTO DE MAPAS E INDICADORES (Tu código original)
+    # ---------------------------------------------------------
+    # Recuperar Dataframe de Manzanas...
     if 'manzanas_final' in locals() and not manzanas_final.empty:
         df_reporte = manzanas_final.copy()
     else:
         df_reporte = manzanas_zona.copy()
-        # Cruce con POT si la columna no existe
+        # ... (Lógica de cruce POT si es necesario) ...
         if not areas_pot.empty and 'uso_pot_simplificado' not in df_reporte.columns:
             try:
                 if areas_pot.crs != df_reporte.crs:
@@ -1021,59 +1038,48 @@ if st.session_state.step == 5:
                 cruce = gpd.sjoin(df_reporte, areas_pot[['uso_pot_simplificado', 'geometry']], how='left', predicate='intersects')
                 cruce = cruce[~cruce.index.duplicated(keep='first')]
                 df_reporte['uso_pot_simplificado'] = cruce['uso_pot_simplificado']
-            except:
-                pass 
+            except: pass 
 
-    # Calcular KPIs (Los 5 puntos clave)
+    # Calcular KPIs
     num_tm = len(transporte_zona)
     num_col = len(colegios_zona)
-    # --- NUEVOS KPIs ---
     num_salud = len(salud_zona)
-    num_parques = len(parques_zona)
     
-    # 3. Normativa (POT) - Moda
-    if 'uso_pot_simplificado' not in df_reporte.columns:
-        df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
+    # Modas
+    if 'uso_pot_simplificado' not in df_reporte.columns: df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
     uso_moda = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()[0]
     
-    # 4. Estratificación (Moda)
     try:
-        if 'estrato' in df_reporte.columns:
-            estrato_moda = int(df_reporte['estrato'].mode()[0])
-        else:
-            estrato_moda = "N/A"
-    except:
-        estrato_moda = "N/A"
+        if 'estrato' in df_reporte.columns: estrato_moda = int(df_reporte['estrato'].mode()[0])
+        else: estrato_moda = "N/A"
+    except: estrato_moda = "N/A"
 
-    # 5. Seguridad
+    # Seguridad
     localidad = st.session_state.localidad_sel
     datos_loc = localidades[localidades['nombre_localidad'] == localidad].iloc[0]
     seguridad_texto = datos_loc.get('top_3_delitos', 'No disponible')
     
-    # Formatear seguridad en lista vertical
     if "," in seguridad_texto:
         items_seg = seguridad_texto.split(",")
-        lista_seguridad_html = "<ul style='margin-top:5px; margin-bottom:5px;'>"
+        lista_seguridad_html = "<ul style='margin-top:5px; margin-bottom:5px; padding-left: 20px;'>"
         for item in items_seg:
             lista_seguridad_html += f"<li>{item.strip()}</li>"
         lista_seguridad_html += "</ul>"
     else:
         lista_seguridad_html = f"<p>{seguridad_texto}</p>"
 
-    # Variables de Contexto
+    # Variables Contexto
     radio = st.session_state.radio_analisis
     lat, lon = st.session_state.punto_lat, st.session_state.punto_lon
 
-    # ALGORITMO DE SCORING VIABILIDAD (ACTUALIZADO 5 PUNTOS)
+    # SCORING
     score = 0
-    if num_tm >= 2: score += 1      # Transporte
-    if num_col >= 1: score += 1     # Educación
-    if uso_moda != "Sin Clasificación": score += 1 # Normativa
-    if num_parques >= 1: score += 1 # Parques (NUEVO)
-    if num_salud >= 1: score += 1   # Salud (NUEVO)
+    if num_tm >= 2: score += 1
+    if num_col >= 1: score += 1
+    if uso_moda != "Sin Clasificación": score += 1
+    if num_salud >= 1: score += 1
     
-    # Recalibración del dictamen
-    if score >= 4:
+    if score >= 3:
         dictamen = "VIABILIDAD ALTA ⭐⭐⭐"
         color_fondo = "#27AE60"
     elif score >= 2:
@@ -1083,99 +1089,38 @@ if st.session_state.step == 5:
         dictamen = "VIABILIDAD RESTRINGIDA ⭐"
         color_fondo = "#C0392B"
 
-    # GENERACIÓN DE IMAGEN ESTÁTICA PARA EL REPORTE
-    with st.spinner("Generando mapa detallado con estaciones, colegios y bienestar..."):
+    # IMAGEN ESTÁTICA MAPA
+    with st.spinner("Generando mapa detallado..."):
         try:
             fig_mapa = go.Figure()
-
-            # Radio de Influencia
+            # Zona
             if 'area_interes' in locals():
                 lats_poly = list(area_interes.exterior.xy[1])
                 lons_poly = list(area_interes.exterior.xy[0])
-                fig_mapa.add_trace(go.Scattermapbox(
-                    lat=lats_poly, lon=lons_poly,
-                    mode='lines', fill='toself',
-                    fillcolor='rgba(52, 152, 219, 0.1)',
-                    line=dict(color='#3498DB', width=2),
-                    name='Zona'
-                ))
-
-            # Estaciones de Transmilenio
-            if not transporte_zona.empty:
-                fig_mapa.add_trace(go.Scattermapbox(
-                    lat=transporte_zona.geometry.y,
-                    lon=transporte_zona.geometry.x,
-                    mode='markers',
-                    marker=dict(size=6, color='#E74C3C'), # Rojo
-                    name='Estaciones'
-                ))
-
-            # Colegios
-            if not colegios_zona.empty:
-                fig_mapa.add_trace(go.Scattermapbox(
-                    lat=colegios_zona.geometry.y,
-                    lon=colegios_zona.geometry.x,
-                    mode='markers',
-                    marker=dict(size=6, color="#9625C7"), # Morado
-                    name='Colegios'
-                ))
-
-            # --- NUEVO: SALUD ---
-            if not salud_zona.empty:
-                fig_mapa.add_trace(go.Scattermapbox(
-                    lat=salud_zona.geometry.y,
-                    lon=salud_zona.geometry.x,
-                    mode='markers',
-                    marker=dict(size=6, color="#3A07F3", symbol='circle'), 
-                    name='Salud'
-                ))
-
-            # --- NUEVO: PARQUES (Puntos centroides para la imagen estática) ---
-            if not parques_zona.empty:
-                centros = parques_zona.geometry.centroid
-                fig_mapa.add_trace(go.Scattermapbox(
-                    lat=centros.y,
-                    lon=centros.x,
-                    mode='markers',
-                    marker=dict(size=6, color="#178B27", symbol='circle'), 
-                    name='Parques'
-                ))
-
-            # El PIN del Usuario
-            fig_mapa.add_trace(go.Scattermapbox(
-                lat=[lat], lon=[lon],
-                mode='markers',
-                marker=dict(size=12, color='black', symbol='circle'),
-                name='Ubicación'
-            ))
-
-            fig_mapa.update_layout(
-                mapbox_style="carto-positron",
-                mapbox_zoom=14.5,
-                mapbox_center={"lat": lat, "lon": lon},
-                margin={"r":0,"t":0,"l":0,"b":0},
-                showlegend=False
-            )
+                fig_mapa.add_trace(go.Scattermapbox(lat=lats_poly, lon=lons_poly, mode='lines', fill='toself', fillcolor='rgba(52, 152, 219, 0.1)', line=dict(color='#3498DB', width=2)))
+            # Puntos
+            if not transporte_zona.empty: fig_mapa.add_trace(go.Scattermapbox(lat=transporte_zona.geometry.y, lon=transporte_zona.geometry.x, mode='markers', marker=dict(size=6, color='#E74C3C')))
+            if not colegios_zona.empty: fig_mapa.add_trace(go.Scattermapbox(lat=colegios_zona.geometry.y, lon=colegios_zona.geometry.x, mode='markers', marker=dict(size=6, color="#9625C7")))
+            if not salud_zona.empty: fig_mapa.add_trace(go.Scattermapbox(lat=salud_zona.geometry.y, lon=salud_zona.geometry.x, mode='markers', marker=dict(size=6, color="#3A07F3")))
+            # Usuario
+            fig_mapa.add_trace(go.Scattermapbox(lat=[lat], lon=[lon], mode='markers', marker=dict(size=12, color='black')))
             
-            # Exportar a Base64 para poder incrustar en HTML
+            fig_mapa.update_layout(mapbox_style="carto-positron", mapbox_zoom=14.5, mapbox_center={"lat": lat, "lon": lon}, margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+            
             img_bytes = fig_mapa.to_image(format="png", width=600, height=350, scale=2)
             b64_mapa = base64.b64encode(img_bytes).decode('utf-8')
             html_mapa = f'<img src="data:image/png;base64,{b64_mapa}" style="width:100%; border-radius:8px; border:1px solid #ccc;">'
-            
-        except Exception as e:
-            html_mapa = f"<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible ({str(e)})</div>"
+        except:
+            html_mapa = "<div style='padding:20px; background:#f0f0f0;'>Mapa no disponible</div>"
     
-    # Generar marca de tiempo con Zona Horaria de Colombia
+    # Fecha
     from datetime import datetime
-    import pytz # Librería para zonas horarias
+    import pytz
+    fecha_reporte = datetime.now(pytz.timezone('America/Bogota')).strftime("%d/%m/%Y %I:%M %p") 
 
-    zona_bogota = pytz.timezone('America/Bogota')
-    
-    ahora_bogota = datetime.now(zona_bogota)
-    
-    fecha_reporte = ahora_bogota.strftime("%d/%m/%Y %I:%M %p") 
-
-    # PLANTILLA HTML 
+    # ---------------------------------------------------------
+    # 3. CONSTRUCCIÓN DEL HTML (CON EL LINK INYECTADO)
+    # ---------------------------------------------------------
     html_report = f"""
     <!DOCTYPE html>
     <html>
@@ -1185,25 +1130,24 @@ if st.session_state.step == 5:
             body {{ font-family: 'Helvetica', sans-serif; max-width: 800px; margin: 0 auto; color: #333; }}
             .header {{ text-align: center; padding: 25px; background: #2C3E50; color: white; border-radius: 0 0 10px 10px; }}
             .card {{ border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-            .intro-text {{ font-size: 14px; color: #555; font-style: italic; margin-bottom: 15px; text-align: justify; }}
-            
-            /* Estilo Tabla KPI */
             .kpi-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-            .kpi-table th {{ background-color: #F4F6F7; padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 11px; color: #555; vertical-align: middle; }}
+            .kpi-table th {{ background-color: #F4F6F7; padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 11px; color: #555; }}
             .kpi-table td {{ padding: 10px; text-align: center; border: 1px solid #ddd; font-size: 16px; font-weight: bold; color: #2C3E50; }}
-            
-            /* Círculos de Colores (Leyenda) */
-            .dot {{
-                height: 10px;
-                width: 10px;
-                border-radius: 50%;
-                display: inline-block;
-                margin-right: 5px;
-                border: 1px solid #ccc;
-            }}
-
+            .dot {{ height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }}
             .dictamen-box {{ margin-top: 20px; padding: 20px; background: {color_fondo}; color: white; text-align: center; border-radius: 8px; }}
-            .security-box {{ margin-top: 10px; padding: 15px; background: #FDEDEC; border-left: 5px solid #C0392B; color: #922B21; }}
+            
+            /* ESTILO PARA EL BOTÓN DENTRO DEL REPORTE */
+            .btn-twin {{
+                display: inline-block;
+                background-color: #2980B9;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 5px;
+                font-weight: bold;
+                margin-top: 15px;
+                font-size: 14px;
+            }}
         </style>
     </head>
     <body>
@@ -1213,20 +1157,20 @@ if st.session_state.step == 5:
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 Análisis de Entorno y Cobertura</h3>
-            
-            <p class="intro-text">
-                Una vez evaluada la zona seleccionada en las coordenadas ({lat:.4f}, {lon:.4f}) con un radio de {radio} metros, 
-                es importante determinar los factores de infraestructura, bienestar y normativa detallados:
-            </p>
-            
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">📍 Ubicación y Entorno</h3>
+            <p style="font-size: 14px; color: #555;">Coordenadas: {lat:.4f}, {lon:.4f} | Radio: {radio}m</p>
             {html_mapa}
             
+            <div style="text-align: center;">
+                <a href="{url_final}" target="_blank" class="btn-twin">
+                    🚀 Ver en Gemelo Digital 3D
+                </a>
+            </div>
+
             <table class="kpi-table">
                 <tr>
                     <th><span class="dot" style="background-color: #E74C3C;"></span>TRANSMILENIO</th>
                     <th><span class="dot" style="background-color: #9625C7;"></span>COLEGIOS</th>
-                    <th><span class="dot" style="background-color: #178B27;"></span>PARQUES</th>
                     <th><span class="dot" style="background-color: #3A07F3;"></span>SALUD</th>
                     <th>MODA ESTRATO</th>
                     <th>MODA USO POT</th>
@@ -1234,7 +1178,6 @@ if st.session_state.step == 5:
                 <tr>
                     <td>{num_tm}</td>
                     <td>{num_col}</td>
-                    <td>{num_parques}</td>
                     <td>{num_salud}</td>
                     <td>{estrato_moda}</td>
                     <td style="font-size:12px;">{uso_moda}</td>
@@ -1243,91 +1186,57 @@ if st.session_state.step == 5:
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ Contexto de Seguridad</h3>
-            <p class="intro-text">
-                A nivel de la localidad de {localidad}, es prudente destacar que el entorno de seguridad se caracteriza 
-                por la prevalencia de los siguientes incidentes de alto impacto:
-            </p>
-            <div class="security-box">
+            <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;">🛡️ Seguridad (Top 3 Delitos)</h3>
+            <div style="background: #FDEDEC; padding: 15px; border-left: 5px solid #C0392B; color: #922B21;">
                 {lista_seguridad_html}
             </div>
         </div>
 
         <div class="dictamen-box">
-            <p style="margin:0; font-size:14px; opacity:0.9;">DICTAMEN TÉCNICO MULTIDIMENSIONAL</p>
+            <p style="margin:0; font-size:14px; opacity:0.9;">DICTAMEN TÉCNICO</p>
             <h2 style="margin:5px 0 0; font-size:24px;">{dictamen}</h2>
-            <p style="margin-top:10px; font-size:12px;">Basado en 5 factores: Movilidad, Educación, Salud, Espacio Público y Normativa.</p>
         </div>
         
         <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
-            Reporte generado automáticamente con Datos Abiertos de Bogotá | {fecha_reporte}
+            Generado con Bogotá Visible | {fecha_reporte}
         </div>
     </body>
     </html>
     """
 
-   
-    # ZONA DE DESCARGA Y ACCIONES
+    # ---------------------------------------------------------
+    # 4. BOTONES DE ACCIÓN (Interfaz Streamlit)
+    # ---------------------------------------------------------
     st.markdown("---")
-    
-    
-    col1, col2, col3 = st.columns([1, 1, 2])
-    
-    # 1. Botón Descargar Reporte
+
+    # CSS Maestro (Como lo teníamos)
+    st.markdown("""
+    <style>
+    [data-testid="stDownloadButton"] button, [data-testid="stButton"] button, [data-testid="stLinkButton"] a {
+        height: 50px !important; width: 100% !important; border-radius: 8px !important; font-weight: 800 !important; border: none !important;
+        display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important;
+        color: white !important; margin: 0 !important; text-decoration: none !important; padding: 0 !important;
+    }
+    [data-testid="stDownloadButton"] button { background-color: #27AE60 !important; }
+    [data-testid="stButton"] button { background-color: #7F8C8D !important; }
+    [data-testid="stLinkButton"] a { background-color: #2980B9 !important; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    [data-testid="stDownloadButton"] button:hover, [data-testid="stButton"] button:hover, [data-testid="stLinkButton"] a:hover {
+        transform: translateY(-3px); box-shadow: 0 5px 10px rgba(0,0,0,0.3) !important; color: white !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1, 1.5], gap="small") 
+
     with col1:
-        
-        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; width: 100%;}</style>""", unsafe_allow_html=True)
-        st.download_button(
-            label="📥 Descargar Ficha",
-            data=html_report,
-            file_name=f"Ficha_{localidad}.html",
-            mime="text/html"
-        )
-        
-    # 2. Botón Nuevo Análisis
+        st.download_button(label="📥 Descargar Ficha", data=html_report, file_name=f"Ficha_{localidad}.html", mime="text/html")
+
     with col2:
         if st.button("🔄 Reiniciar", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            for key in list(st.session_state.keys()): del st.session_state[key]
             st.session_state.step = 1 
             st.rerun()
 
-    # 3. Botón GEMELO DIGITAL 
     with col3:
-        
-        
-        # URL DE  GITHUB 
-        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO" 
-        
-        # Construir Parámetros
-        params_payload = {
-            "lat": st.session_state.punto_lat,
-            "lon": st.session_state.punto_lon,
-            "radio": st.session_state.radio_analisis,
-            "loc": st.session_state.localidad_sel,
-            "altura": "1000" 
-        }
-        
-        query_string = urllib.parse.urlencode(params_payload)
-        url_final = f"{URL_BASE_CESIUM}?{query_string}"
-        
-        # Botón HTML personalizado 
-        st.markdown(f"""
-            <a href="{url_final}" target="_blank" style="text-decoration: none;">
-                <button style="
-                    width: 100%;
-                    background-color: #2980B9; 
-                    color: white; 
-                    border: none; 
-                    padding: 0.5rem 1rem; /* Ajustado para igualar altura de los otros */
-                    font-size: 16px; 
-                    font-weight: bold; 
-                    border-radius: 8px; 
-                    cursor: pointer;
-                    line-height: 1.6;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                ">
-                    🚀 GEMELO DIGITAL
-                </button>
-            </a>
-        """, unsafe_allow_html=True)
+        # AQUI REUTILIZAMOS LA URL QUE CALCULAMOS ARRIBA
+        st.link_button(label="🚀 VER GEMELO DIGITAL", url=url_final, use_container_width=True)
