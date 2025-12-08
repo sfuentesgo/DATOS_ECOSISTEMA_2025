@@ -1269,72 +1269,22 @@ if st.session_state.step == 5:
    
     # ZONA DE DESCARGA Y ACCIONES
     st.markdown("---")
-
-    # --- CSS MAESTRO DE UNIFICACIÓN ---
-    st.markdown("""
-    <style>
-    /* 1. RESETEO UNIVERSAL para los 3 tipos de botones */
-    /* Atacamos los selectores exactos de Streamlit para Descarga, Botón Normal y LinkButton */
-    [data-testid="stDownloadButton"] button,
-    [data-testid="stButton"] button,
-    [data-testid="stLinkButton"] a {
-        height: 50px !important;  /* Altura idéntica forzada */
-        width: 100% !important;   /* Ancho completo */
-        border-radius: 8px !important;
-        font-weight: 800 !important; /* Fuente gruesa */
-        border: none !important;
-        display: flex !important;
-        align-items: center !important; /* Centrado Vertical perfecto */
-        justify-content: center !important; /* Centrado Horizontal perfecto */
-        transition: all 0.3s ease !important;
-        color: white !important;
-        margin: 0 !important;
-        text-decoration: none !important; /* Quitar subrayado al link */
-        padding: 0 !important; /* Eliminar paddings internos que descuadran */
-    }
-
-    /* 2. COLORES ESPECÍFICOS POR TIPO */
-
-    /* Botón Descargar (Verde) */
-    [data-testid="stDownloadButton"] button {
-        background-color: #27AE60 !important;
-    }
-
-    /* Botón Reiniciar (Gris) */
-    [data-testid="stButton"] button {
-        background-color: #7F8C8D !important;
-    }
-
-    /* Botón Gemelo Digital (LinkButton - Azul) */
-    [data-testid="stLinkButton"] a {
-        background-color: #2980B9 !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Sombra suave */
-    }
-
-    /* 3. EFECTO HOVER (ELEVACIÓN) PARA TODOS */
-    [data-testid="stDownloadButton"] button:hover,
-    [data-testid="stButton"] button:hover,
-    [data-testid="stLinkButton"] a:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 10px rgba(0,0,0,0.3) !important;
-        color: white !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Distribución de Columnas (Ajuste fino de anchos)
-    col1, col2, col3 = st.columns([1, 1, 1.5], gap="small") 
-
-    # 1. BOTÓN DESCARGAR (Nativo)
+    
+    
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    # 1. Botón Descargar Reporte
     with col1:
+        
+        st.markdown("""<style>div.stDownloadButton > button {background-color: #27AE60 !important; color: white !important; width: 100%;}</style>""", unsafe_allow_html=True)
         st.download_button(
             label="📥 Descargar Ficha",
             data=html_report,
             file_name=f"Ficha_{localidad}.html",
             mime="text/html"
         )
-
-    # 2. BOTÓN REINICIAR (Nativo)
+        
+    # 2. Botón Nuevo Análisis
     with col2:
         if st.button("🔄 Reiniciar", use_container_width=True):
             for key in list(st.session_state.keys()):
@@ -1342,11 +1292,14 @@ if st.session_state.step == 5:
             st.session_state.step = 1 
             st.rerun()
 
-    # 3. BOTÓN GEMELO DIGITAL (Nativo - LinkButton)
+    # 3. Botón GEMELO DIGITAL 
     with col3:
-        # URL DE GITHUB PAGES
-        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
         
+        
+        # URL DE  GITHUB 
+        URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO" 
+        
+        # Construir Parámetros
         params_payload = {
             "lat": st.session_state.punto_lat,
             "lon": st.session_state.punto_lon,
@@ -1358,10 +1311,23 @@ if st.session_state.step == 5:
         query_string = urllib.parse.urlencode(params_payload)
         url_final = f"{URL_BASE_CESIUM}?{query_string}"
         
-        # Usamos st.link_button en lugar de HTML sucio
-        # Esto garantiza que el botón sea idéntico a los otros dos
-        st.link_button(
-            label="🚀 VER GEMELO DIGITAL", 
-            url=url_final,
-            use_container_width=True
-        )
+        # Botón HTML personalizado 
+        st.markdown(f"""
+            <a href="{url_final}" target="_blank" style="text-decoration: none;">
+                <button style="
+                    width: 100%;
+                    background-color: #2980B9; 
+                    color: white; 
+                    border: none; 
+                    padding: 0.5rem 1rem; /* Ajustado para igualar altura de los otros */
+                    font-size: 16px; 
+                    font-weight: bold; 
+                    border-radius: 8px; 
+                    cursor: pointer;
+                    line-height: 1.6;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                ">
+                    🚀 GEMELO DIGITAL
+                </button>
+            </a>
+        """, unsafe_allow_html=True)
