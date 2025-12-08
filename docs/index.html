@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bogotá Visible - Gemelo Digital</title>
+    
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    
+    <style>
+        /* Tipografía moderna */
+        body, html { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #000; }
+        #cesiumContainer { width: 100%; height: 100%; }
+        
+        /* --- BANNER SUPERIOR --- */
+        #topBanner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+            z-index: 1000;
+            text-align: center;
+            pointer-events: none; /* Permite hacer clic a través del texto */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #topBanner h1 {
+            margin: 0;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.7); 
+        }
+
+        #topBanner p {
+            margin: 5px 0 0 0;
+            color: #ccc;
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        /* --- PANEL LATERAL --- */
+        #uiPanel {
+            position: absolute;
+            top: 90px; /* Bajamos un poco el panel para no chocar con el título */
+            left: 20px;
+            background: rgba(15, 20, 35, 0.95);
+            color: #eee;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 5px solid #FF69B4;
+            z-index: 999;
+            width: 280px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+        }
+
+        h2 { margin: 0 0 15px 0; font-size: 18px; color: #fff; font-weight: 600; }
+        
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #bbb; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+        .data-val { font-weight: bold; color: #FF69B4; } 
+
+        .legend-box { margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .legend-title { font-size: 11px; text-transform: uppercase; color: #888; margin-bottom: 8px; letter-spacing: 1px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; font-size: 12px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; border: 1px solid rgba(255,255,255,0.5); }
+        
+        .dot-transport { background-color: #FF0000; box-shadow: 0 0 5px #FF0000; }
+        .dot-school { background-color: #9932CC; box-shadow: 0 0 5px #9932CC; }
+        .dot-health { background-color: #1E90FF; box-shadow: 0 0 5px #1E90FF; }
+        
+
+        .footer { margin-top: 20px; font-size: 10px; color: #666; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="cesiumContainer"></div>
+
+    <div id="topBanner">
+        <h1>BOGOTÁ INTELIGENTE</h1>
+        <p>Bienvenido al Gemelo Digital de tu área de interés</p>
+    </div>
+
+    <div id="uiPanel">
+        <h2 id="titulo">📍 Cargando...</h2>
+        
+        <div class="data-row"><span>Radio:</span> <span id="lblRadio" class="data-val">--</span></div>
+        <div class="data-row"><span>Latitud:</span> <span id="lblLat" class="data-val">--</span></div>
+        <div class="data-row"><span>Longitud:</span> <span id="lblLon" class="data-val">--</span></div>
+
+        <div class="legend-box">
+            <div class="legend-title">Capas Activas</div>
+            <div class="legend-item"><div class="dot dot-transport"></div> Transmilenio</div>
+            <div class="legend-item"><div class="dot dot-school"></div> Colegios</div>
+            <div class="legend-item"><div class="dot dot-health"></div> Hospitales / IPS</div>
+            
+        </div>
+
+        <div class="footer">Gemelo Digital 2025 • Cesium Ion</div>
+    </div>
+
+    <script>
+        // 🔑 TOKEN
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NmY0NDc1NS0wNTI1LTQ5MzktODU4Yi04MzEyZDBhNGQ1OGMiLCJpZCI6MzY3NDIwLCJpYXQiOjE3NjUxMjUyNzJ9.rNorYTcXLUMNiocHyuT9VPqrMUdC6yHvbKq8kW-PVds'; 
+
+        const params = new URLSearchParams(window.location.search);
+        const lat = parseFloat(params.get('lat')) || 4.5981;
+        const lon = parseFloat(params.get('lon')) || -74.0760;
+        const radio = parseFloat(params.get('radio')) || 500;
+        const localidad = params.get('loc') || "Bogotá D.C.";
+
+        document.getElementById('titulo').innerText = `📍 ${localidad}`;
+        document.getElementById('lblRadio').innerText = `${radio} m`;
+        document.getElementById('lblLat').innerText = lat.toFixed(4);
+        document.getElementById('lblLon').innerText = lon.toFixed(4);
+
+        async function iniciarCesium() {
+            try {
+                const viewer = new Cesium.Viewer('cesiumContainer', {
+                    terrain: Cesium.Terrain.fromWorldTerrain(), 
+                    animation: false,
+                    timeline: false,
+                    baseLayerPicker: true, 
+                    fullscreenButton: false,
+                    homeButton: false,
+                    infoBox: true,
+                    selectionIndicator: true,
+                    sceneModePicker: false,
+                    navigationHelpButton: false,
+                    geocoder: false,
+                    creditContainer: document.createElement("div")
+                });
+
+                // EDIFICIOS
+                try {
+                    const edificios = await Cesium.createOsmBuildingsAsync();
+                    viewer.scene.primitives.add(edificios);
+                } catch (e) { console.log("Advertencia edificios:", e); }
+
+                const centroUsuario = Cesium.Cartesian3.fromDegrees(lon, lat);
+
+                // TRANSPORTE
+                try {
+                    const url = 'https://raw.githubusercontent.com/andres-fuentex/CONCURSO/main/DATOS_LIMPIOS/dim_transporte.geojson';
+                    const ds = await Cesium.GeoJsonDataSource.load(url);
+                    ds.entities.values.forEach(entity => {
+                        const dist = Cesium.Cartesian3.distance(centroUsuario, entity.position.getValue(Cesium.JulianDate.now()));
+                        if (dist <= radio) {
+                            entity.point = new Cesium.PointGraphics({
+                                color: Cesium.Color.RED, pixelSize: 9, outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+                                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY
+                            });
+                            entity.billboard = undefined;
+                        } else { entity.show = false; }
+                    });
+                    viewer.dataSources.add(ds);
+                } catch (e) {}
+
+                // COLEGIOS
+                try {
+                    const url = 'https://raw.githubusercontent.com/andres-fuentex/CONCURSO/main/DATOS_LIMPIOS/dim_colegios.geojson';
+                    const ds = await Cesium.GeoJsonDataSource.load(url);
+                    ds.entities.values.forEach(entity => {
+                        const dist = Cesium.Cartesian3.distance(centroUsuario, entity.position.getValue(Cesium.JulianDate.now()));
+                        if (dist <= radio) {
+                            entity.point = new Cesium.PointGraphics({
+                                color: Cesium.Color.DARKORCHID, pixelSize: 10, outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+                                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY
+                            });
+                            entity.name = entity.properties.nombre || "Colegio";
+                            entity.billboard = undefined;
+                        } else { entity.show = false; }
+                    });
+                    viewer.dataSources.add(ds);
+                } catch (e) {}
+
+                // SALUD
+                try {
+                    const url = 'https://raw.githubusercontent.com/andres-fuentex/CONCURSO/main/DATOS_LIMPIOS/dim_salud.geojson';
+                    const ds = await Cesium.GeoJsonDataSource.load(url);
+                    ds.entities.values.forEach(entity => {
+                        const dist = Cesium.Cartesian3.distance(centroUsuario, entity.position.getValue(Cesium.JulianDate.now()));
+                        if (dist <= radio) {
+                            entity.point = new Cesium.PointGraphics({
+                                color: Cesium.Color.DODGERBLUE, pixelSize: 12, outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+                                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY
+                            });
+                            entity.name = entity.properties.nombre_hospital || entity.properties.nombre || "Salud";
+                            entity.billboard = undefined;
+                        } else { entity.show = false; }
+                    });
+                    viewer.dataSources.add(ds);
+                } catch (e) {}
+
+                // RADIO Y CENTRO
+                viewer.entities.add({
+                    position: centroUsuario,
+                    ellipse: {
+                        semiMinorAxis: radio, semiMajorAxis: radio,
+                        material: Cesium.Color.HOTPINK.withAlpha(0.2),
+                        outline: true, outlineColor: Cesium.Color.DEEPPINK, outlineWidth: 2
+                    }
+                });
+                viewer.entities.add({
+                    position: centroUsuario,
+                    point: { pixelSize: 12, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.HOTPINK, outlineWidth: 3, heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY }
+                });
+
+                // CÁMARA
+                const altura = radio * 3.5; 
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.004, altura),
+                    orientation: { heading: 0.0, pitch: Cesium.Math.toRadians(-35.0), roll: 0.0 },
+                    duration: 3.5
+                });
+
+            } catch (error) { alert("Error: " + error.message); }
+        }
+
+        iniciarCesium();
+    </script>
+</body>
+</html>
