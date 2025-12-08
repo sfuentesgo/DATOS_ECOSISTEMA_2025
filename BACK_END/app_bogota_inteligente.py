@@ -1305,7 +1305,7 @@ if st.session_state.step == 5:
             "lon": st.session_state.punto_lon,
             "radio": st.session_state.radio_analisis,
             "loc": st.session_state.localidad_sel,
-            "altura": "900" 
+            "altura": "1000" 
         }
         
         query_string = urllib.parse.urlencode(params_payload)
