@@ -1,4 +1,4 @@
-# 🏙️ Bogotá Visible: Inteligencia Territorial
+# 🏙️ Bogotá Inteligente: Visibilidad y analisis Territorial
 
 > **Herramienta de microanálisis urbano y Gemelo Digital para la toma de decisiones ciudadanas.**
 
