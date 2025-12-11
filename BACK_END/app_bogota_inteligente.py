@@ -623,7 +623,7 @@ elif st.session_state.step == 5:
         cant_t = len(transporte_zona)
         st.metric("Puntos de Transporte", cant_t)
         
-        if cant_t > 3:
+        if cant_t > 2:
             st.success("✅ **Excelente Conectividad:**\nTienes muchas opciones de ruta cerca.")
         elif cant_t > 0:
             st.warning("⚠️ **Conectividad Media:**\nTienes transporte, pero quizás debas caminar un poco.")
@@ -670,7 +670,7 @@ elif st.session_state.step == 5:
         cant_c = len(colegios_zona)
         st.metric("Total Colegios", cant_c)
         
-        if cant_c > 3:
+        if cant_c > 4:
             st.success("✅ **Alta Oferta Educativa:**\nVariedad de opciones para las familias.")
         elif cant_c > 0:
             st.info("ℹ️ **Oferta Moderada:**\nColegios accesibles en el sector.")
