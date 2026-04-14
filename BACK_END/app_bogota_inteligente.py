@@ -305,7 +305,7 @@ elif st.session_state.step == 2:
         m = folium.Map(
             location=centro_urbano, 
             zoom_start=11, 
-            tiles="CartoDB positron",
+            tiles="OpenStreetMap",
             control_scale=True
         )
         
@@ -458,7 +458,7 @@ elif st.session_state.step == 3:
         m = folium.Map(
             location=centro_mapa,
             zoom_start=zoom_inicial,
-            tiles="CartoDB positron",
+            tiles="OpenStreetMap",
             control_scale=True
         )
 
