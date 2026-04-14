@@ -465,10 +465,10 @@ elif st.session_state.step == 3:
         folium.GeoJson(
             localidad_geo,
             style_function=lambda x: {
-                "fillColor": "#F1C40F",
-                "color": "#7F8C8D",
-                "weight": 2,
-                "fillOpacity": 0.1,
+                "fillColor": "#F1C40F",  # Mantenemos tu amarillo
+                "color": "#DA291C",      # Borde color Rojo Bogotá para que contraste
+                "weight": 3,             # Borde un poco más grueso
+                "fillOpacity": 0.35,     # Aumentamos la opacidad para que no se pierda con las calles
                 "dashArray": "5, 5"
             }
         ).add_to(m)
