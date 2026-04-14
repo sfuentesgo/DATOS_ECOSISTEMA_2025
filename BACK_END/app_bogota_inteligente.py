@@ -1046,13 +1046,21 @@ if st.session_state.step == 5:
     num_salud = len(salud_zona)
     
     # Modas
-    if 'uso_pot_simplificado' not in df_reporte.columns: df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
-    uso_moda = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()[0]
+    # Modas
+    if 'uso_pot_simplificado' not in df_reporte.columns: 
+        df_reporte['uso_pot_simplificado'] = "Sin Clasificación"
+        
+    modas_uso = df_reporte['uso_pot_simplificado'].fillna("Sin Clasificación").mode()
+    uso_moda = modas_uso[0] if not modas_uso.empty else "Sin Clasificación"
     
     try:
-        if 'estrato' in df_reporte.columns: estrato_moda = int(df_reporte['estrato'].mode()[0])
-        else: estrato_moda = "N/A"
-    except: estrato_moda = "N/A"
+        if 'estrato' in df_reporte.columns: 
+            modas_estrato = df_reporte['estrato'].mode()
+            estrato_moda = int(modas_estrato[0]) if not modas_estrato.empty else "N/A"
+        else: 
+            estrato_moda = "N/A"
+    except: 
+        estrato_moda = "N/A"
 
     # Seguridad
     localidad = st.session_state.localidad_sel
