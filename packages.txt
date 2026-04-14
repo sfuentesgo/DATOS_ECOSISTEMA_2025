@@ -1,5 +1,12 @@
-chromium
-chromium-driver
 wget
 curl
 unzip
+
+
+libfontconfig1
+
+
+xvfb
+chromium
+python3-pip
+libgconf-2-4
