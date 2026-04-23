@@ -1009,7 +1009,7 @@ if st.session_state.step == 5:
     # 1. PREPARACIÓN DE DATOS (URL DEL GEMELO DIGITAL)
     # ---------------------------------------------------------
     # Definimos la URL AQUÍ para usarla tanto en el reporte como en el botón de abajo
-    URL_BASE_CESIUM = "https://andres-fuentex.github.io/CONCURSO/" 
+    URL_BASE_CESIUM = "https://sfuentesgo.github.io/DATOS_ECOSISTEMA_2025/" 
     
     params_payload = {
         "lat": st.session_state.punto_lat,
